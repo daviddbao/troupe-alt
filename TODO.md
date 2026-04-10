@@ -17,24 +17,23 @@
 - [x] Activity planning grid: CSS grid, 7am–10pm rows, days as columns, group/personal activities
 - [x] Itinerary page: gated on scheduled dates, links from trip detail
 - [x] Unit tests: auth actions (6), trip actions (7) with in-memory SQLite
-- [x] Vitest config: exclude E2E, resolve tsconfig paths
 - [x] Production build fix: remove inline "use server" from client component
-
-## Fix Now (correctness / trust)
-- [ ] **Activity feedback**: show toast on successful add/delete; surface error message on failure
-- [ ] **Itinerary grid React key warning**: `HOURS.map()` renders a fragment without a `key` prop — add key to the fragment (itinerary-grid.tsx line ~142)
+- [x] Activity add/delete toast + error feedback
+- [x] Itinerary grid React key warning fixed
+- [x] Signup friction removed — display name derived from email, 2-field form
+- [x] Availability save: toast + auto-redirect back to trip page
+- [x] Join trip confirmation: "You've joined X!" banner after invite redirect
+- [x] Dashboard: new trip is a modal button when trips exist, inline form on empty state
+- [x] Itinerary link: full green button in scheduled banner, impossible to miss
+- [x] Past dates disabled on availability calendar
 
 ## Fix Soon (UX gaps)
-- [ ] **Organizer transfer**: block organizer from leaving a trip without first promoting another member; prevent orphaned trips
-- [ ] **Empty itinerary hint**: show an onboarding message when no activities exist yet ("Tap any slot to add an activity")
-- [ ] **Disable past dates on availability calendar**: past dates should be unselectable in react-day-picker
+- [ ] **Organizer transfer**: block organizer from leaving without promoting someone first; prevent orphaned trips
+- [ ] **Trip date on dashboard card**: show scheduled date range (e.g. "Jun 14–18") instead of just "Scheduled"
 
 ## Optional / Low Stakes
-- [ ] **Invite expiry**: permanent links are fine for friend groups — only worth adding if trips become sensitive or app scales up
-
-## Nice to Have
-- [ ] **Trip date on dashboard card**: show the scheduled date range (e.g. "Jun 14–18") on the dashboard card instead of just "Scheduled"
-- [ ] **Aggregate calendar legend**: add a small legend explaining that darker = more people available
-- [ ] **Real-time updates**: availability/activity changes visible to other members without manual refresh (polling or SSE)
+- [ ] **Invite expiry**: permanent links are fine for friend groups — only worth adding if app scales
+- [ ] **Aggregate calendar legend**: small legend explaining darker = more people available
+- [ ] **Real-time updates**: availability/activity changes visible without manual refresh (polling or SSE)
 - [ ] **Notifications**: email nudge when a friend joins or submits availability
 - [ ] **Playwright E2E tests**: full signup → trip → availability → invite → aggregate flow
