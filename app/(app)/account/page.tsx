@@ -6,11 +6,10 @@ import { AccountForm } from "@/components/account/account-form"
 
 export default async function AccountPage() {
   const session = await auth()
-  const profile = await db
+  const [profile] = await db
     .select({ displayName: profiles.displayName, email: profiles.email })
     .from(profiles)
     .where(eq(profiles.id, session!.user.id))
-    .get()
 
   return (
     <div className="max-w-md mx-auto px-4 py-8">

@@ -30,11 +30,10 @@ export async function signup(
     return { error: "Password must be at least 8 characters." }
   }
 
-  const existing = await db
+  const [existing] = await db
     .select({ id: profiles.id })
     .from(profiles)
     .where(eq(profiles.email, email.toLowerCase()))
-    .get()
 
   if (existing) {
     return { error: "An account with that email already exists." }
@@ -61,11 +60,10 @@ export async function login(
 
   if (!email || !password) return { error: "Email and password are required." }
 
-  const user = await db
+  const [user] = await db
     .select()
     .from(profiles)
     .where(eq(profiles.email, email.toLowerCase()))
-    .get()
 
   if (!user) return { error: "No account found with that email." }
 
@@ -74,14 +72,29 @@ export async function login(
 
   try {
     await signIn("credentials", { email: email.toLowerCase(), password, redirectTo: callbackUrl })
-  } catch (err) {
-    if (err instanceof AuthError) {
-      return { error: "Sign in failed. Please try again." }
-    }
-    throw err
+  } catch (e) {
+    if (e instanceof AuthError) return { error: "Something went wrong. Please try again." }
+    throw e
   }
 }
 
 export async function logout() {
   await signOut({ redirectTo: "/login" })
+}
+
+export async function updateDisplayName(
+  _prevState: { error?: string; success?: boolean } | undefined,
+  formData: FormData
+) {
+  const { auth } = await import("@/lib/auth")
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const displayName = (formData.get("displayName") as string)?.trim()
+  if (!displayName) return { error: "Display name is required." }
+
+  const { profiles: profilesTable } = await import("@/lib/db/schema")
+  await db.update(profilesTable).set({ displayName }).where(eq(profilesTable.id, session.user.id))
+
+  return { success: true }
 }

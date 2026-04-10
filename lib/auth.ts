@@ -19,11 +19,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       authorize: async (credentials) => {
         if (!credentials?.email || !credentials?.password) return null
 
-        const user = await db
+        const [user] = await db
           .select()
           .from(profiles)
           .where(eq(profiles.email, credentials.email as string))
-          .get()
 
         if (!user) return null
 

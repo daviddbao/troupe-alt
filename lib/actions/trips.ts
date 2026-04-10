@@ -18,11 +18,10 @@ export async function createTrip(
   const name = (formData.get("name") as string)?.trim()
   if (!name) return { error: "Trip name is required." }
 
-  const trip = await db
+  const [trip] = await db
     .insert(trips)
     .values({ name, createdBy: session.user.id })
     .returning()
-    .get()
 
   await db.insert(tripMembers).values({
     tripId: trip.id,
@@ -37,7 +36,7 @@ export async function getTripWithMembers(tripId: string) {
   const session = await auth()
   if (!session?.user?.id) return null
 
-  const trip = await db.select().from(trips).where(eq(trips.id, tripId)).get()
+  const [trip] = await db.select().from(trips).where(eq(trips.id, tripId))
   if (!trip) return null
 
   const members = await db
@@ -91,11 +90,10 @@ export async function getExistingInvite(tripId: string) {
   const session = await auth()
   if (!session?.user?.id) return null
 
-  const invite = await db
+  const [invite] = await db
     .select()
     .from(tripInvites)
     .where(eq(tripInvites.tripId, tripId))
-    .get()
 
   return invite ? invite.code : null
 }
@@ -104,8 +102,7 @@ export async function createInvite(tripId: string) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
-  // Only organizers can create invites
-  const membership = await db
+  const [membership] = await db
     .select()
     .from(tripMembers)
     .where(
@@ -114,16 +111,13 @@ export async function createInvite(tripId: string) {
         eq(tripMembers.userId, session.user.id)
       )
     )
-    .get()
 
   if (!membership) return { error: "Not a member of this trip." }
 
-  // Check for existing valid invite
-  const existing = await db
+  const [existing] = await db
     .select()
     .from(tripInvites)
     .where(eq(tripInvites.tripId, tripId))
-    .get()
 
   if (existing) return { code: existing.code }
 
@@ -137,16 +131,14 @@ export async function joinTripByCode(code: string) {
   const session = await auth()
   if (!session?.user?.id) redirect(`/login?callbackUrl=/invite/${code}`)
 
-  const invite = await db
+  const [invite] = await db
     .select()
     .from(tripInvites)
     .where(eq(tripInvites.code, code))
-    .get()
 
   if (!invite) return { error: "Invalid invite link." }
 
-  // Check if already a member
-  const existing = await db
+  const [existing] = await db
     .select()
     .from(tripMembers)
     .where(
@@ -155,7 +147,6 @@ export async function joinTripByCode(code: string) {
         eq(tripMembers.userId, session.user.id)
       )
     )
-    .get()
 
   if (!existing) {
     await db.insert(tripMembers).values({
@@ -176,7 +167,7 @@ export async function savePreferences(
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
-  const membership = await db
+  const [membership] = await db
     .select()
     .from(tripMembers)
     .where(
@@ -185,7 +176,6 @@ export async function savePreferences(
         eq(tripMembers.userId, session.user.id)
       )
     )
-    .get()
 
   if (!membership) return { error: "Not a member of this trip." }
 
@@ -227,7 +217,6 @@ function computeBestWindows(
   const sorted = Object.keys(dateCounts).sort()
   if (sorted.length === 0) return []
 
-  // Build contiguous windows
   const windows: { dates: string[]; avg: number }[] = []
   let current = [sorted[0]]
 
@@ -246,25 +235,20 @@ function computeBestWindows(
   const avg = current.reduce((s, d) => s + dateCounts[d], 0) / current.length
   windows.push({ dates: [...current], avg })
 
-  // If a window is longer than minNights, also consider all sub-windows of exactly minNights
-  // to find the best-fit slice within a long block of availability
   const candidates: { dates: string[]; avg: number }[] = []
   for (const w of windows) {
     if (w.dates.length >= minNights) {
-      // Slide a minNights-wide window through
       for (let start = 0; start <= w.dates.length - minNights; start++) {
         const slice = w.dates.slice(start, start + minNights)
         const sliceAvg = slice.reduce((s, d) => s + dateCounts[d], 0) / slice.length
         candidates.push({ dates: slice, avg: sliceAvg })
       }
-      // Also include the full window if it meets the minimum
       candidates.push(w)
     }
   }
 
   if (candidates.length === 0) return []
 
-  // Deduplicate by first+last date, keep highest avg per pair
   const seen = new Map<string, { dates: string[]; avg: number }>()
   for (const c of candidates) {
     const key = `${c.dates[0]}|${c.dates[c.dates.length - 1]}`
@@ -282,20 +266,19 @@ export async function getTripAggregateAvailability(tripId: string) {
   const session = await auth()
   if (!session?.user?.id) return null
 
-  // Verify membership
-  const membership = await db
+  const [membership] = await db
     .select()
     .from(tripMembers)
     .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
-    .get()
   if (!membership) return null
 
-  const [members, blocks, tripRow] = await Promise.all([
+  const [members, blocks, tripRowArr] = await Promise.all([
     db.select({ userId: tripMembers.userId }).from(tripMembers).where(eq(tripMembers.tripId, tripId)),
     db.select({ userId: availabilityBlocks.userId, date: availabilityBlocks.date }).from(availabilityBlocks).where(eq(availabilityBlocks.tripId, tripId)),
-    db.select({ preferences: trips.preferences }).from(trips).where(eq(trips.id, tripId)).get(),
+    db.select({ preferences: trips.preferences }).from(trips).where(eq(trips.id, tripId)),
   ])
 
+  const tripRow = tripRowArr[0]
   const minNights = (tripRow?.preferences as { nights?: number } | null)?.nights ?? 1
 
   const dateCounts: Record<string, number> = {}
@@ -319,7 +302,7 @@ export async function setAvailabilityDates(tripId: string, dates: string[]) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
-  const membership = await db
+  const [membership] = await db
     .select()
     .from(tripMembers)
     .where(
@@ -328,11 +311,9 @@ export async function setAvailabilityDates(tripId: string, dates: string[]) {
         eq(tripMembers.userId, session.user.id)
       )
     )
-    .get()
 
   if (!membership) return { error: "Not a member of this trip." }
 
-  // Replace all dates for this user/trip
   await db
     .delete(availabilityBlocks)
     .where(
@@ -356,21 +337,14 @@ export async function setAvailabilityDates(tripId: string, dates: string[]) {
   revalidatePath(`/trips/${tripId}/availability`)
 }
 
-// ── Trip scheduling ───────────────────────────────────────────────────────────
-
-export async function scheduleTripDates(
-  tripId: string,
-  startDate: string,
-  endDate: string
-) {
+export async function scheduleTripDates(tripId: string, startDate: string, endDate: string) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
-  const membership = await db
+  const [membership] = await db
     .select()
     .from(tripMembers)
     .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
-    .get()
 
   if (membership?.role !== "organizer") return { error: "Only the organizer can schedule the trip." }
 
@@ -386,11 +360,10 @@ export async function clearTripSchedule(tripId: string) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
-  const membership = await db
+  const [membership] = await db
     .select()
     .from(tripMembers)
     .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
-    .get()
 
   if (membership?.role !== "organizer") return { error: "Only the organizer can change the schedule." }
 
@@ -406,11 +379,10 @@ export async function renameTrip(tripId: string, name: string) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
-  const membership = await db
+  const [membership] = await db
     .select()
     .from(tripMembers)
     .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
-    .get()
 
   if (membership?.role !== "organizer") return { error: "Only the organizer can rename the trip." }
 
@@ -426,11 +398,10 @@ export async function deleteTrip(tripId: string) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
-  const membership = await db
+  const [membership] = await db
     .select()
     .from(tripMembers)
     .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
-    .get()
 
   if (membership?.role !== "organizer") return { error: "Only the organizer can delete the trip." }
 
@@ -442,29 +413,20 @@ export async function leaveTrip(tripId: string) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
-  const membership = await db
+  const [membership] = await db
     .select()
     .from(tripMembers)
     .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
-    .get()
 
   if (!membership) return { error: "Not a member of this trip." }
 
-  // Organizer can only leave if another organizer exists
   if (membership.role === "organizer") {
     const otherOrganizers = await db
       .select()
       .from(tripMembers)
-      .where(
-        and(
-          eq(tripMembers.tripId, tripId),
-          eq(tripMembers.role, "organizer")
-        )
-      )
+      .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.role, "organizer")))
     const hasOtherOrganizer = otherOrganizers.some((m) => m.userId !== session.user!.id)
-    if (!hasOtherOrganizer) {
-      return { error: "promote_first" }
-    }
+    if (!hasOtherOrganizer) return { error: "promote_first" }
   }
 
   await db
@@ -478,11 +440,10 @@ export async function promoteMember(tripId: string, userId: string) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
-  const membership = await db
+  const [membership] = await db
     .select()
     .from(tripMembers)
     .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
-    .get()
 
   if (membership?.role !== "organizer") return { error: "Only an organizer can promote members." }
 
@@ -494,17 +455,14 @@ export async function promoteMember(tripId: string, userId: string) {
   revalidatePath(`/trips/${tripId}`)
 }
 
-// ── Trip activities (itinerary) ───────────────────────────────────────────────
-
 export async function getTripActivities(tripId: string) {
   const session = await auth()
   if (!session?.user?.id) return []
 
-  const membership = await db
+  const [membership] = await db
     .select()
     .from(tripMembers)
     .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
-    .get()
   if (!membership) return []
 
   return db
@@ -528,11 +486,10 @@ export async function addTripActivity(
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
-  const membership = await db
+  const [membership] = await db
     .select()
     .from(tripMembers)
     .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
-    .get()
   if (!membership) return { error: "Not a member of this trip." }
 
   if (!activity.title.trim()) return { error: "Activity title is required." }
@@ -555,20 +512,17 @@ export async function deleteTripActivity(tripId: string, activityId: string) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
-  const activity = await db
+  const [activity] = await db
     .select()
     .from(tripActivities)
     .where(and(eq(tripActivities.id, activityId), eq(tripActivities.tripId, tripId)))
-    .get()
 
   if (!activity) return { error: "Activity not found." }
   if (activity.createdBy !== session.user.id) {
-    // Organizers can delete any activity
-    const membership = await db
+    const [membership] = await db
       .select()
       .from(tripMembers)
       .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
-      .get()
     if (membership?.role !== "organizer") return { error: "You can only delete your own activities." }
   }
 

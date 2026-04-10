@@ -1,5 +1,4 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core"
-import { sql } from "drizzle-orm"
+import { pgTable, text, integer, timestamp, json } from "drizzle-orm/pg-core"
 
 export type TripPreferences = {
   nights?: number
@@ -9,19 +8,17 @@ export type TripPreferences = {
   notes?: string
 }
 
-export const profiles = sqliteTable("profiles", {
+export const profiles = pgTable("profiles", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   email: text("email").notNull().unique(),
   displayName: text("display_name").notNull(),
   passwordHash: text("password_hash").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" }).default(
-    sql`(unixepoch())`
-  ),
+  createdAt: timestamp("created_at").defaultNow(),
 })
 
-export const trips = sqliteTable("trips", {
+export const trips = pgTable("trips", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -29,27 +26,25 @@ export const trips = sqliteTable("trips", {
   createdBy: text("created_by")
     .notNull()
     .references(() => profiles.id),
-  preferences: text("preferences", { mode: "json" }).$type<TripPreferences>(),
+  preferences: json("preferences").$type<TripPreferences>(),
   scheduledStart: text("scheduled_start"), // ISO date YYYY-MM-DD, null = not yet scheduled
   scheduledEnd: text("scheduled_end"),     // ISO date YYYY-MM-DD
-  createdAt: integer("created_at", { mode: "timestamp" }).default(
-    sql`(unixepoch())`
-  ),
+  createdAt: timestamp("created_at").defaultNow(),
 })
 
-export const tripMembers = sqliteTable("trip_members", {
+export const tripMembers = pgTable("trip_members", {
   tripId: text("trip_id")
     .notNull()
     .references(() => trips.id, { onDelete: "cascade" }),
   userId: text("user_id")
     .notNull()
     .references(() => profiles.id, { onDelete: "cascade" }),
-  role: text("role", { enum: ["organizer", "member"] })
+  role: text("role")
     .notNull()
     .default("member"),
 })
 
-export const availabilityBlocks = sqliteTable("availability_blocks", {
+export const availabilityBlocks = pgTable("availability_blocks", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -62,7 +57,7 @@ export const availabilityBlocks = sqliteTable("availability_blocks", {
   date: text("date").notNull(), // ISO date string: YYYY-MM-DD
 })
 
-export const tripActivities = sqliteTable("trip_activities", {
+export const tripActivities = pgTable("trip_activities", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -72,14 +67,14 @@ export const tripActivities = sqliteTable("trip_activities", {
   createdBy: text("created_by")
     .notNull()
     .references(() => profiles.id),
-  date: text("date").notNull(),          // ISO date YYYY-MM-DD
-  startHour: integer("start_hour").notNull(), // 0–23
-  endHour: integer("end_hour").notNull(),     // 1–24, must be > startHour
+  date: text("date").notNull(),
+  startHour: integer("start_hour").notNull(),
+  endHour: integer("end_hour").notNull(),
   title: text("title").notNull(),
-  type: text("type", { enum: ["group", "personal"] }).notNull().default("group"),
+  type: text("type").notNull().default("group"),
 })
 
-export const tripInvites = sqliteTable("trip_invites", {
+export const tripInvites = pgTable("trip_invites", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -87,5 +82,5 @@ export const tripInvites = sqliteTable("trip_invites", {
     .notNull()
     .references(() => trips.id, { onDelete: "cascade" }),
   code: text("code").notNull().unique(),
-  expiresAt: integer("expires_at", { mode: "timestamp" }),
+  expiresAt: timestamp("expires_at"),
 })
