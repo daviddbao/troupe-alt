@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ':*)",
+      "Bash(where python3:*)",
+      "Bash(where python:*)",
+      "Bash(where py:*)",
+      "Read(//c/Users/david/AppData/Local/Programs/**)",
+      "Bash(where node:*)",
+      "Bash(unzip -o \"Troupe PRD.docx\" -d troupe_docx_extracted)",
+      "Bash(xmllint --xpath \"//*[local-name\\(\\)='t']/text\\(\\)\" troupe_docx_extracted/word/document.xml)",
+      "Bash(perl -0777 -ne 'while \\(/<w:t[^>]*>\\([^<]*\\)<\\\\/w:t>/g\\) { print \"$1\\\\n\" }' document.xml)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --use-npm --yes)",
+      "Bash(npm --version)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Users/david/AppData/Roaming/**)",
+      "Bash(cmd.exe:*)",
+      "Bash(powershell.exe:*)",
+      "Bash(export PATH=\"/c/Users/david/AppData/Local/Programs/nodejs:$PATH\")",
+      "Bash(npx create-next-app@latest troupe-temp --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --use-npm --yes)",
+      "Bash(cp -r troupe-temp/. .)",
+      "Bash(rm -rf troupe-temp)",
+      "Bash(export:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(gh auth:*)",
+      "Bash(gh repo:*)",
+      "Bash(gh api:*)"
+    ]
+  }
+}
