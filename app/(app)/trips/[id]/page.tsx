@@ -67,7 +67,7 @@ export default async function TripPage({ params, searchParams }: Props) {
           </svg>
         </Link>
         <h1 className="text-xl font-semibold flex-1">{trip.name}</h1>
-        <TripActions tripId={id} tripName={trip.name} isOrganizer={isOrganizer} />
+        <TripActions tripId={id} tripName={trip.name} isOrganizer={isOrganizer} members={members} myUserId={session?.user?.id ?? ""} />
       </div>
 
       {/* Joined banner */}

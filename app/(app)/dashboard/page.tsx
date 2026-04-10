@@ -2,6 +2,16 @@ import { getUserTrips } from "@/lib/actions/trips"
 import { CreateTripForm } from "@/components/trips/create-trip-form"
 import Link from "next/link"
 
+function formatDateRange(start: string, end: string) {
+  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" }
+  const s = new Date(start + "T00:00:00").toLocaleDateString("en-US", opts)
+  if (start === end) return s
+  const eDay = new Date(end + "T00:00:00").toLocaleDateString("en-US", { day: "numeric" })
+  const eMonth = new Date(end + "T00:00:00").toLocaleDateString("en-US", { month: "short" })
+  const sMonth = new Date(start + "T00:00:00").toLocaleDateString("en-US", { month: "short" })
+  return sMonth === eMonth ? `${s}–${eDay}` : `${s} – ${eMonth} ${eDay}`
+}
+
 export default async function DashboardPage() {
   const trips = await getUserTrips()
 
@@ -53,7 +63,9 @@ export default async function DashboardPage() {
                     {trip.scheduledStart && trip.scheduledEnd && (
                       <>
                         <span className="text-xs text-gray-300">·</span>
-                        <span className="text-xs text-green-600 font-medium">Scheduled</span>
+                        <span className="text-xs text-green-600 font-medium">
+                          {formatDateRange(trip.scheduledStart, trip.scheduledEnd)}
+                        </span>
                       </>
                     )}
                   </div>

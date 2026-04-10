@@ -1,19 +1,25 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { deleteTrip, leaveTrip, renameTrip } from "@/lib/actions/trips"
+import { deleteTrip, leaveTrip, renameTrip, promoteMember } from "@/lib/actions/trips"
+
+type Member = { userId: string; displayName: string; role: string }
 
 export function TripActions({
   tripId,
   tripName,
   isOrganizer,
+  members,
+  myUserId,
 }: {
   tripId: string
   tripName: string
   isOrganizer: boolean
+  members: Member[]
+  myUserId: string
 }) {
   const [open, setOpen] = useState(false)
-  const [mode, setMode] = useState<"menu" | "rename" | "confirmDelete" | "confirmLeave">("menu")
+  const [mode, setMode] = useState<"menu" | "rename" | "confirmDelete" | "confirmLeave" | "promoteBeforeLeave">("menu")
   const [name, setName] = useState(tripName)
   const [isPending, startTransition] = useTransition()
 
@@ -34,9 +40,21 @@ export function TripActions({
 
   function handleLeave() {
     startTransition(async () => {
+      const result = await leaveTrip(tripId)
+      if (result?.error === "promote_first") {
+        setMode("promoteBeforeLeave")
+      }
+    })
+  }
+
+  function handlePromoteThenLeave(userId: string) {
+    startTransition(async () => {
+      await promoteMember(tripId, userId)
       await leaveTrip(tripId)
     })
   }
+
+  const otherMembers = members.filter((m) => m.userId !== myUserId)
 
   return (
     <>
@@ -67,6 +85,14 @@ export function TripActions({
                     </button>
                   )}
                   {!isOrganizer && (
+                    <button
+                      onClick={() => setMode("confirmLeave")}
+                      className="w-full text-left py-2.5 px-3 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      Leave trip
+                    </button>
+                  )}
+                  {isOrganizer && (
                     <button
                       onClick={() => setMode("confirmLeave")}
                       className="w-full text-left py-2.5 px-3 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors"
@@ -131,6 +157,34 @@ export function TripActions({
                     {isPending ? "Leaving…" : "Leave"}
                   </button>
                 </div>
+              </>
+            )}
+
+            {mode === "promoteBeforeLeave" && (
+              <>
+                <h2 className="font-semibold mb-2">Hand off organizer role</h2>
+                <p className="text-sm text-gray-500 mb-4">Pick someone to take over as organizer before you leave.</p>
+                {otherMembers.length === 0 ? (
+                  <p className="text-sm text-gray-400 mb-4">No other members to promote. Delete the trip instead.</p>
+                ) : (
+                  <ul className="space-y-2 mb-4">
+                    {otherMembers.map((m) => (
+                      <li key={m.userId}>
+                        <button
+                          onClick={() => handlePromoteThenLeave(m.userId)}
+                          disabled={isPending}
+                          className="w-full flex items-center justify-between py-2.5 px-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all text-sm disabled:opacity-50"
+                        >
+                          <span className="font-medium">{m.displayName}</span>
+                          <span className="text-xs text-gray-400">Make organizer</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <button onClick={reset} className="w-full py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50">
+                  Cancel
+                </button>
               </>
             )}
 

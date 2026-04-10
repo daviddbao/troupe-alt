@@ -449,13 +449,49 @@ export async function leaveTrip(tripId: string) {
     .get()
 
   if (!membership) return { error: "Not a member of this trip." }
-  if (membership.role === "organizer") return { error: "The organizer cannot leave — delete the trip instead." }
+
+  // Organizer can only leave if another organizer exists
+  if (membership.role === "organizer") {
+    const otherOrganizers = await db
+      .select()
+      .from(tripMembers)
+      .where(
+        and(
+          eq(tripMembers.tripId, tripId),
+          eq(tripMembers.role, "organizer")
+        )
+      )
+    const hasOtherOrganizer = otherOrganizers.some((m) => m.userId !== session.user!.id)
+    if (!hasOtherOrganizer) {
+      return { error: "promote_first" }
+    }
+  }
 
   await db
     .delete(tripMembers)
     .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
 
   redirect("/dashboard")
+}
+
+export async function promoteMember(tripId: string, userId: string) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const membership = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+    .get()
+
+  if (membership?.role !== "organizer") return { error: "Only an organizer can promote members." }
+
+  await db
+    .update(tripMembers)
+    .set({ role: "organizer" })
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, userId)))
+
+  revalidatePath(`/trips/${tripId}`)
 }
 
 // ── Trip activities (itinerary) ───────────────────────────────────────────────
