@@ -28,8 +28,8 @@
 - [x] Past dates disabled on availability calendar
 
 ## Fix Soon (UX gaps)
-- [ ] **Organizer transfer**: block organizer from leaving without promoting someone first; prevent orphaned trips
-- [ ] **Trip date on dashboard card**: show scheduled date range (e.g. "Jun 14–18") instead of just "Scheduled"
+- [x] **Organizer transfer**: promote-then-leave flow; sole organizer shown member list to pick successor
+- [x] **Trip date on dashboard card**: shows actual date range (e.g. "Jun 14–18")
 
 ## Optional / Low Stakes
 - [ ] **Invite expiry**: permanent links are fine for friend groups — only worth adding if app scales
