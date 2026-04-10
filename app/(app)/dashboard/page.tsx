@@ -9,9 +9,8 @@ export default async function DashboardPage() {
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-semibold">Your trips</h1>
+        {trips.length > 0 && <CreateTripForm />}
       </div>
-
-      <CreateTripForm />
 
       {trips.length === 0 ? (
         <div className="mt-8 py-10 px-6 border border-dashed border-gray-200 rounded-xl space-y-4">
@@ -35,6 +34,7 @@ export default async function DashboardPage() {
               See which dates work best for the whole group
             </li>
           </ol>
+          <CreateTripForm inline />
         </div>
       ) : (
         <ul className="mt-6 space-y-2">

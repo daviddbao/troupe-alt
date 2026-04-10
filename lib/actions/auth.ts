@@ -14,11 +14,17 @@ export async function signup(
 ) {
   const email = formData.get("email") as string
   const password = formData.get("password") as string
-  const displayName = formData.get("displayName") as string
 
-  if (!email || !password || !displayName) {
+  if (!email || !password) {
     return { error: "All fields are required." }
   }
+
+  // Derive display name from email prefix (e.g. "john.doe@..." → "John Doe")
+  const displayName = email
+    .split("@")[0]
+    .replace(/[._-]+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim() || "Friend"
 
   if (password.length < 8) {
     return { error: "Password must be at least 8 characters." }

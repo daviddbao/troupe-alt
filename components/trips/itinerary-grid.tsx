@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import React, { useState, useTransition } from "react"
 import { addTripActivity, deleteTripActivity } from "@/lib/actions/trips"
 
 const HOURS = Array.from({ length: 16 }, (_, i) => i + 7) // 7am – 10pm
@@ -54,6 +54,14 @@ export function ItineraryGrid({
   const [type, setType] = useState<"group" | "personal">("group")
   const [isPending, startTransition] = useTransition()
   const [localActivities, setLocalActivities] = useState<Activity[]>(activities)
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function showToast(msg: string) {
+    setToast(msg)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 2500)
+  }
 
   function openModal(day: string, hour: number) {
     setModal({ day, hour })
@@ -73,8 +81,9 @@ export function ItineraryGrid({
         title: title.trim(),
         type,
       })
-      if (!result?.error) {
-        // Optimistic update
+      if (result?.error) {
+        showToast("Failed to add activity")
+      } else {
         setLocalActivities((prev) => [
           ...prev,
           {
@@ -88,14 +97,19 @@ export function ItineraryGrid({
           },
         ])
         setModal(null)
+        showToast("Activity added")
       }
     })
   }
 
   function handleDelete(activityId: string) {
     startTransition(async () => {
-      await deleteTripActivity(tripId, activityId)
-      setLocalActivities((prev) => prev.filter((a) => a.id !== activityId))
+      const result = await deleteTripActivity(tripId, activityId)
+      if (result?.error) {
+        showToast("Failed to delete activity")
+      } else {
+        setLocalActivities((prev) => prev.filter((a) => a.id !== activityId))
+      }
     })
   }
 
@@ -103,6 +117,13 @@ export function ItineraryGrid({
 
   return (
     <>
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl shadow-lg pointer-events-none">
+          {toast}
+        </div>
+      )}
+
       {/* Legend */}
       <div className="flex items-center gap-4 mb-4 text-xs text-gray-500">
         <span className="flex items-center gap-1.5">
@@ -140,7 +161,7 @@ export function ItineraryGrid({
 
           {/* Hour rows */}
           {HOURS.map((hour) => (
-            <>
+            <React.Fragment key={hour}>
               {/* Hour label */}
               <div
                 key={`label-${hour}`}
@@ -206,7 +227,7 @@ export function ItineraryGrid({
                   </div>
                 )
               })}
-            </>
+            </React.Fragment>
           ))}
         </div>
       </div>

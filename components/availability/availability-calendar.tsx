@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition, useRef, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { DayPicker } from "react-day-picker"
 import { setAvailabilityDates } from "@/lib/actions/trips"
 import "react-day-picker/style.css"
@@ -80,6 +81,7 @@ function getDatesBetween(a: string, b: string): string[] {
 type Props = { tripId: string; savedDates: string[] }
 
 export function AvailabilityCalendar({ tripId, savedDates }: Props) {
+  const router = useRouter()
   const [selected, setSelected] = useState<string[]>(savedDates)
   const [rangeAnchor, setRangeAnchor] = useState<string | null>(null)
   const [hoverDate, setHoverDate] = useState<string | null>(null)
@@ -186,7 +188,8 @@ export function AvailabilityCalendar({ tripId, savedDates }: Props) {
   function handleSave() {
     startTransition(async () => {
       await setAvailabilityDates(tripId, selected)
-      showToast("Saved!")
+      showToast("Availability saved!")
+      setTimeout(() => router.push(`/trips/${tripId}`), 1200)
     })
   }
 

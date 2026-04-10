@@ -165,7 +165,8 @@ export async function joinTripByCode(code: string) {
     })
   }
 
-  redirect(`/trips/${invite.tripId}`)
+  const isNew = !existing
+  redirect(`/trips/${invite.tripId}${isNew ? "?joined=1" : ""}`)
 }
 
 export async function savePreferences(

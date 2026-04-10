@@ -9,21 +9,6 @@ export function SignupForm() {
   return (
     <form action={action} className="space-y-4">
       <div>
-        <label htmlFor="displayName" className="block text-sm font-medium mb-1.5">
-          Name
-        </label>
-        <input
-          id="displayName"
-          name="displayName"
-          type="text"
-          required
-          autoComplete="name"
-          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-          placeholder="Your name"
-        />
-      </div>
-
-      <div>
         <label htmlFor="email" className="block text-sm font-medium mb-1.5">
           Email
         </label>
