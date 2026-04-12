@@ -5,6 +5,8 @@ import * as schema from "@/lib/db/schema"
 export function createTestDb() {
   const sqlite = new Database(":memory:")
   sqlite.pragma("foreign_keys = ON")
+  // Drizzle's pg-core defaultNow() emits now() in SQL; register it for SQLite compatibility
+  sqlite.function("now", () => new Date().toISOString())
 
   // Create tables matching schema.ts — ids are JS-side UUIDs so no SQL DEFAULT needed
   sqlite.exec(`
