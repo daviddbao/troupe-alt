@@ -79,7 +79,7 @@ export default async function ItineraryPage({ params }: Props) {
       <ItineraryGrid
         tripId={id}
         days={days}
-        activities={activities.map((a) => ({ ...a, type: a.type as "group" | "personal" }))}
+        activities={activities}
         myUserId={myUserId}
         isOrganizer={isOrganizer}
         members={members}

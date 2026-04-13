@@ -11,7 +11,6 @@ let inviteUrl: string
 test.describe("Full trip flow", () => {
   test("Alice signs up and creates a trip", async ({ page }) => {
     await page.goto("/signup")
-    await page.fill('input[name="displayName"]', alice.name)
     await page.fill('input[name="email"]', alice.email)
     await page.fill('input[name="password"]', alice.password)
     await page.click('button[type="submit"]')
@@ -44,7 +43,7 @@ test.describe("Full trip flow", () => {
     await expect(page).toHaveURL(/\/availability$/)
 
     // Click a future day (first visible non-disabled day in the calendar)
-    const dayButton = page.locator(".rdp-day_button:not([disabled])").first()
+    const dayButton = page.locator('[data-testid="availability-calendar"] button:not([disabled])').first()
     await dayButton.click()
 
     // Save
@@ -127,6 +126,6 @@ test.describe("Auth error messages", () => {
     await page.fill('input[name="email"]', alice.email)
     await page.fill('input[name="password"]', "wrongpassword")
     await page.click('button[type="submit"]')
-    await expect(page.getByText(/incorrect password/i)).toBeVisible()
+    await expect(page.getByText(/incorrect password\./i)).toBeVisible()
   })
 })

@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { trips, tripMembers, tripInvites, profiles, availabilityBlocks, tripActivities } from "@/lib/db/schema"
+import { trips, tripMembers, tripInvites, profiles, availabilityBlocks, tripActivities, activityAttendees } from "@/lib/db/schema"
 import { eq, and, inArray } from "drizzle-orm"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
@@ -465,23 +465,69 @@ export async function getTripActivities(tripId: string) {
     .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
   if (!membership) return []
 
-  return db
+  const acts = await db
     .select({
       id: tripActivities.id,
       date: tripActivities.date,
-      startHour: tripActivities.startHour,
-      endHour: tripActivities.endHour,
+      startMins: tripActivities.startMins,
+      endMins: tripActivities.endMins,
       title: tripActivities.title,
-      type: tripActivities.type,
+      isOpen: tripActivities.isOpen,
+      isPrivate: tripActivities.isPrivate,
+      category: tripActivities.category,
+      color: tripActivities.color,
+      location: tripActivities.location,
       createdBy: tripActivities.createdBy,
     })
     .from(tripActivities)
     .where(eq(tripActivities.tripId, tripId))
+
+  // Filter out private activities that belong to other users
+  const visible = acts.filter(
+    (a) => !a.isPrivate || a.createdBy === session.user.id
+  )
+
+  if (visible.length === 0) return []
+
+  // Fetch attendees for all visible open activities
+  const openIds = visible.filter((a) => a.isOpen).map((a) => a.id)
+  const attendeeRows = openIds.length > 0
+    ? await db
+        .select({
+          activityId: activityAttendees.activityId,
+          userId: activityAttendees.userId,
+          displayName: profiles.displayName,
+        })
+        .from(activityAttendees)
+        .innerJoin(profiles, eq(activityAttendees.userId, profiles.id))
+        .where(inArray(activityAttendees.activityId, openIds))
+    : []
+
+  return visible.map((a) => {
+    const attendees = attendeeRows
+      .filter((r) => r.activityId === a.id)
+      .map((r) => ({ userId: r.userId, displayName: r.displayName }))
+    return {
+      ...a,
+      attendees,
+      iAmAttending: attendees.some((att) => att.userId === session.user.id),
+    }
+  })
 }
 
 export async function addTripActivity(
   tripId: string,
-  activity: { date: string; startHour: number; endHour: number; title: string; type: "group" | "personal" }
+  activity: {
+    date: string
+    startMins: number
+    endMins: number
+    title: string
+    isOpen?: boolean
+    isPrivate?: boolean
+    category?: string | null
+    color?: string | null
+    location?: string | null
+  }
 ) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
@@ -493,17 +539,32 @@ export async function addTripActivity(
   if (!membership) return { error: "Not a member of this trip." }
 
   if (!activity.title.trim()) return { error: "Activity title is required." }
-  if (activity.endHour <= activity.startHour) return { error: "End time must be after start time." }
+  if (activity.endMins <= activity.startMins) return { error: "End time must be after start time." }
 
-  await db.insert(tripActivities).values({
+  const isOpen = activity.isOpen ?? true
+  const isPrivate = activity.isPrivate ?? false
+
+  const [inserted] = await db.insert(tripActivities).values({
     tripId,
     createdBy: session.user.id,
     date: activity.date,
-    startHour: activity.startHour,
-    endHour: activity.endHour,
+    startMins: activity.startMins,
+    endMins: activity.endMins,
     title: activity.title.trim(),
-    type: activity.type,
-  })
+    isOpen: isOpen ? 1 : 0,
+    isPrivate: isPrivate ? 1 : 0,
+    category: activity.category ?? null,
+    color: activity.color ?? null,
+    location: activity.location?.trim() || null,
+  }).returning()
+
+  // Auto-add creator as attendee on open activities
+  if (isOpen && inserted?.id) {
+    await db.insert(activityAttendees).values({
+      activityId: inserted.id,
+      userId: session.user.id,
+    })
+  }
 
   revalidatePath(`/trips/${tripId}/itinerary`)
 }
@@ -527,5 +588,79 @@ export async function deleteTripActivity(tripId: string, activityId: string) {
   }
 
   await db.delete(tripActivities).where(eq(tripActivities.id, activityId))
+  revalidatePath(`/trips/${tripId}/itinerary`)
+}
+
+export async function toggleActivityAttendance(activityId: string, tripId: string) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return { error: "Not a member of this trip." }
+
+  const [existing] = await db
+    .select()
+    .from(activityAttendees)
+    .where(
+      and(
+        eq(activityAttendees.activityId, activityId),
+        eq(activityAttendees.userId, session.user.id)
+      )
+    )
+
+  if (existing) {
+    await db
+      .delete(activityAttendees)
+      .where(
+        and(
+          eq(activityAttendees.activityId, activityId),
+          eq(activityAttendees.userId, session.user.id)
+        )
+      )
+  } else {
+    await db.insert(activityAttendees).values({
+      activityId,
+      userId: session.user.id,
+    })
+  }
+
+  revalidatePath(`/trips/${tripId}/itinerary`)
+}
+
+export async function updateActivityCategory(
+  activityId: string,
+  tripId: string,
+  category: string | null,
+  color: string | null
+) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const [activity] = await db
+    .select()
+    .from(tripActivities)
+    .where(and(eq(tripActivities.id, activityId), eq(tripActivities.tripId, tripId)))
+
+  if (!activity) return { error: "Activity not found." }
+
+  // Only creator can edit personal activities; any member can edit open ones
+  if (!activity.isOpen && activity.createdBy !== session.user.id) {
+    return { error: "Only the creator can edit this activity." }
+  }
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return { error: "Not a member of this trip." }
+
+  await db
+    .update(tripActivities)
+    .set({ category, color })
+    .where(eq(tripActivities.id, activityId))
+
   revalidatePath(`/trips/${tripId}/itinerary`)
 }

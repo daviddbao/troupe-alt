@@ -266,7 +266,7 @@ export function AvailabilityCalendar({ tripId, savedDates }: Props) {
       )}
 
       {/* Calendar */}
-      <div className={`border rounded-xl overflow-hidden transition-colors ${
+      <div data-testid="availability-calendar" className={`border rounded-xl overflow-hidden transition-colors ${
         rangeAnchor ? "border-gray-400" : "border-gray-200"
       }`}>
         <DayPicker
