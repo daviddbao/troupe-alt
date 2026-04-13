@@ -31,9 +31,14 @@
 - [x] **Organizer transfer**: promote-then-leave flow; sole organizer shown member list to pick successor
 - [x] **Trip date on dashboard card**: shows actual date range (e.g. "Jun 14–18")
 
-## Optional / Low Stakes
-- [ ] **Invite expiry**: permanent links are fine for friend groups — only worth adding if app scales
-- [ ] **Aggregate calendar legend**: small legend explaining darker = more people available
+## Up Next
+- [ ] **Playwright E2E tests**: full signup → trip → availability → invite → aggregate flow
+
+## Completed (recent)
+- [x] **Verify itinerary UI**: grid confirmed complete — half-hour slots, categories, open/private, location, attendees; fixed stale `type` cast in itinerary page
+- [x] **Aggregate calendar legend**: color swatches for All / 75%+ / 50%+ / 25%+ / Some
+
+## Deferred (not high priority for friend-group scale)
+- [ ] **Invite expiry**: permanent links are fine — only worth adding if app scales
 - [ ] **Real-time updates**: availability/activity changes visible without manual refresh (polling or SSE)
 - [ ] **Notifications**: email nudge when a friend joins or submits availability
-- [ ] **Playwright E2E tests**: full signup → trip → availability → invite → aggregate flow
