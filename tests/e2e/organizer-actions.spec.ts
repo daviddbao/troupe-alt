@@ -10,7 +10,6 @@ let tripName: string
 
 async function signUp(page: Parameters<Parameters<typeof test>[1]>[0], user: typeof carol) {
   await page.goto("/signup")
-  await page.fill('input[name="displayName"]', user.name)
   await page.fill('input[name="email"]', user.email)
   await page.fill('input[name="password"]', user.password)
   await page.click('button[type="submit"]')
