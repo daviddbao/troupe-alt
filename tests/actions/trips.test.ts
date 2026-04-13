@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { createTestDb } from "../helpers/db"
-import { profiles, trips, tripMembers, availabilityBlocks, tripInvites, tripActivities } from "@/lib/db/schema"
+import { profiles, trips, tripMembers, availabilityBlocks, tripInvites, tripActivities, activityAttendees } from "@/lib/db/schema"
 import { eq, and } from "drizzle-orm"
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
@@ -128,17 +128,18 @@ async function seedActivity(
   id: string,
   tripId: string,
   createdBy: string,
-  overrides: Partial<{ date: string; startHour: number; endHour: number; title: string; type: string }> = {}
+  overrides: Partial<{ date: string; startMins: number; endMins: number; title: string; isOpen: number; isPrivate: number }> = {}
 ) {
   await db.insert(tripActivities).values({
     id,
     tripId,
     createdBy,
     date: overrides.date ?? "2026-07-04",
-    startHour: overrides.startHour ?? 9,
-    endHour: overrides.endHour ?? 10,
+    startMins: overrides.startMins ?? 540,   // 9:00 AM
+    endMins: overrides.endMins ?? 600,        // 10:00 AM
     title: overrides.title ?? "Test Activity",
-    type: overrides.type ?? "group",
+    isOpen: overrides.isOpen ?? 1,
+    isPrivate: overrides.isPrivate ?? 0,
   })
 }
 
@@ -431,27 +432,44 @@ describe("addTripActivity", () => {
 
   it("adds a new activity for a trip member", async () => {
     const { addTripActivity } = await import("@/lib/actions/trips")
-    await addTripActivity("trip-1", { date: "2026-07-04", startHour: 9, endHour: 11, title: "Morning hike", type: "group" })
+    await addTripActivity("trip-1", { date: "2026-07-04", startMins: 540, endMins: 660, title: "Morning hike", isOpen: true })
     const activities = await testDb.select().from(tripActivities).where(eq(tripActivities.tripId, "trip-1"))
     expect(activities).toHaveLength(1)
     expect(activities[0].title).toBe("Morning hike")
     expect(activities[0].createdBy).toBe("user-1")
-    expect(activities[0].startHour).toBe(9)
-    expect(activities[0].endHour).toBe(11)
+    expect(activities[0].startMins).toBe(540)
+    expect(activities[0].endMins).toBe(660)
+  })
+
+  it("auto-adds creator as attendee for open activities", async () => {
+    const { addTripActivity } = await import("@/lib/actions/trips")
+    await addTripActivity("trip-1", { date: "2026-07-04", startMins: 540, endMins: 660, title: "Group hike", isOpen: true })
+    const [act] = await testDb.select().from(tripActivities).where(eq(tripActivities.tripId, "trip-1"))
+    const attendees = await testDb.select().from(activityAttendees).where(eq(activityAttendees.activityId, act.id))
+    expect(attendees).toHaveLength(1)
+    expect(attendees[0].userId).toBe("user-1")
+  })
+
+  it("does not add attendee for non-open activities", async () => {
+    const { addTripActivity } = await import("@/lib/actions/trips")
+    await addTripActivity("trip-1", { date: "2026-07-04", startMins: 540, endMins: 660, title: "Solo hike", isOpen: false })
+    const [act] = await testDb.select().from(tripActivities).where(eq(tripActivities.tripId, "trip-1"))
+    const attendees = await testDb.select().from(activityAttendees).where(eq(activityAttendees.activityId, act.id))
+    expect(attendees).toHaveLength(0)
   })
 
   it("returns error when title is empty", async () => {
     const { addTripActivity } = await import("@/lib/actions/trips")
-    const result = await addTripActivity("trip-1", { date: "2026-07-04", startHour: 9, endHour: 11, title: "   ", type: "group" })
+    const result = await addTripActivity("trip-1", { date: "2026-07-04", startMins: 540, endMins: 660, title: "   " })
     expect(result?.error).toMatch(/title is required/i)
   })
 
-  it("returns error when endHour is not after startHour", async () => {
+  it("returns error when endMins is not after startMins", async () => {
     const { addTripActivity } = await import("@/lib/actions/trips")
-    const sameHour = await addTripActivity("trip-1", { date: "2026-07-04", startHour: 10, endHour: 10, title: "Lunch", type: "group" })
-    expect(sameHour?.error).toMatch(/end time/i)
+    const same = await addTripActivity("trip-1", { date: "2026-07-04", startMins: 600, endMins: 600, title: "Lunch" })
+    expect(same?.error).toMatch(/end time/i)
 
-    const earlier = await addTripActivity("trip-1", { date: "2026-07-04", startHour: 12, endHour: 10, title: "Lunch", type: "group" })
+    const earlier = await addTripActivity("trip-1", { date: "2026-07-04", startMins: 720, endMins: 600, title: "Lunch" })
     expect(earlier?.error).toMatch(/end time/i)
   })
 
@@ -460,7 +478,7 @@ describe("addTripActivity", () => {
     const { auth } = await import("@/lib/auth")
     vi.mocked(auth).mockResolvedValueOnce({ user: { id: "user-2", email: "bob@example.com", name: "Bob" } } as any)
     const { addTripActivity } = await import("@/lib/actions/trips")
-    const result = await addTripActivity("trip-1", { date: "2026-07-04", startHour: 9, endHour: 11, title: "Hike", type: "group" })
+    const result = await addTripActivity("trip-1", { date: "2026-07-04", startMins: 540, endMins: 660, title: "Hike" })
     expect(result?.error).toMatch(/not a member/i)
   })
 })

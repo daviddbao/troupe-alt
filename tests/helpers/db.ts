@@ -33,10 +33,20 @@ export function createTestDb() {
       trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
       created_by TEXT NOT NULL REFERENCES profiles(id),
       date TEXT NOT NULL,
-      start_hour INTEGER NOT NULL,
-      end_hour INTEGER NOT NULL,
+      start_mins INTEGER NOT NULL,
+      end_mins INTEGER NOT NULL,
       title TEXT NOT NULL,
-      type TEXT NOT NULL DEFAULT 'group'
+      is_open INTEGER NOT NULL DEFAULT 1,
+      is_private INTEGER NOT NULL DEFAULT 0,
+      category TEXT,
+      color TEXT,
+      location TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS activity_attendees (
+      activity_id TEXT NOT NULL REFERENCES trip_activities(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      PRIMARY KEY (activity_id, user_id)
     );
 
     CREATE TABLE IF NOT EXISTS trip_members (

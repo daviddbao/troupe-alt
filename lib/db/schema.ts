@@ -68,10 +68,23 @@ export const tripActivities = pgTable("trip_activities", {
     .notNull()
     .references(() => profiles.id),
   date: text("date").notNull(),
-  startHour: integer("start_hour").notNull(),
-  endHour: integer("end_hour").notNull(),
+  startMins: integer("start_mins").notNull(), // minutes from midnight, e.g. 570 = 9:30am
+  endMins: integer("end_mins").notNull(),
   title: text("title").notNull(),
-  type: text("type").notNull().default("group"),
+  isOpen: integer("is_open").notNull().default(1),   // 1 = others can join (default)
+  isPrivate: integer("is_private").notNull().default(0), // 1 = only visible to creator
+  category: text("category"),
+  color: text("color"),   // hex override; falls back to category default
+  location: text("location"),
+})
+
+export const activityAttendees = pgTable("activity_attendees", {
+  activityId: text("activity_id")
+    .notNull()
+    .references(() => tripActivities.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "cascade" }),
 })
 
 export const tripInvites = pgTable("trip_invites", {

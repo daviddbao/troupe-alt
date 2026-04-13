@@ -1,41 +1,85 @@
 "use client"
 
-import React, { useState, useTransition } from "react"
-import { addTripActivity, deleteTripActivity } from "@/lib/actions/trips"
+import React, { useState, useTransition, useEffect, useRef } from "react"
+import {
+  addTripActivity,
+  deleteTripActivity,
+  toggleActivityAttendance,
+  updateActivityCategory,
+} from "@/lib/actions/trips"
+import { DEFAULT_CATEGORIES, suggestCategory, getCategoryColor } from "@/lib/activity-categories"
 
-const HOURS = Array.from({ length: 16 }, (_, i) => i + 7) // 7am – 10pm
+// ── Time config ───────────────────────────────────────────────────────────────
 
-function formatHour(h: number) {
-  if (h === 0) return "12am"
-  if (h < 12) return `${h}am`
-  if (h === 12) return "12pm"
-  return `${h - 12}pm`
+const SLOT_HEIGHT = 40        // px per 30-min slot
+const START_MIN  = 7 * 60    // 7:00 AM = 420
+const END_MIN    = 22 * 60   // 10:00 PM = 1320
+const SLOT_MINS  = 30
+
+const SLOTS = Array.from(
+  { length: (END_MIN - START_MIN) / SLOT_MINS },
+  (_, i) => START_MIN + i * SLOT_MINS
+)
+
+const TIME_OPTIONS = SLOTS.map((mins) => ({ mins, label: formatMins(mins) }))
+
+function formatMins(mins: number): string {
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  const period = h >= 12 ? "pm" : "am"
+  const hour   = h === 0 ? 12 : h > 12 ? h - 12 : h
+  return m === 0
+    ? `${hour}${period}`
+    : `${hour}:${m.toString().padStart(2, "0")}${period}`
+}
+
+function minsRange(start: number, end: number) {
+  return `${formatMins(start)}–${formatMins(end)}`
 }
 
 function formatDay(iso: string) {
   const d = new Date(iso + "T00:00:00")
   return {
     weekday: d.toLocaleDateString("en-US", { weekday: "short" }),
-    date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    date:    d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
   }
 }
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type Attendee = { userId: string; displayName: string }
 
 type Activity = {
   id: string
   date: string
-  startHour: number
-  endHour: number
+  startMins: number
+  endMins: number
   title: string
-  type: "group" | "personal"
+  isOpen: number | boolean
+  isPrivate: number | boolean
+  category: string | null
+  color: string | null
+  location: string | null
   createdBy: string
+  attendees: Attendee[]
+  iAmAttending: boolean
 }
 
 type Member = { userId: string; displayName: string; role: string }
 
+function isOpen(a: Activity)    { return Boolean(a.isOpen) }
+function isPrivate(a: Activity) { return Boolean(a.isPrivate) }
+
+function cardColor(a: Activity): string {
+  return a.color || getCategoryColor(a.category)
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export function ItineraryGrid({
   tripId,
   days,
-  activities,
+  activities: initial,
   myUserId,
   isOrganizer,
   members,
@@ -47,53 +91,95 @@ export function ItineraryGrid({
   isOrganizer: boolean
   members: Member[]
 }) {
-  const [modal, setModal] = useState<{ day: string; hour: number } | null>(null)
-  const [title, setTitle] = useState("")
-  const [startHour, setStartHour] = useState(9)
-  const [endHour, setEndHour] = useState(10)
-  const [type, setType] = useState<"group" | "personal">("group")
-  const [isPending, startTransition] = useTransition()
-  const [localActivities, setLocalActivities] = useState<Activity[]>(activities)
-  const [toast, setToast] = useState<string | null>(null)
-  const toastTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const myDisplayName = members.find((m) => m.userId === myUserId)?.displayName ?? ""
+
+  const [local, setLocal]   = useState<Activity[]>(initial)
+  const [modal, setModal]   = useState<{ day: string; slotMins: number } | null>(null)
+  const [toast, setToast]   = useState<string | null>(null)
+  const [isPending, startT] = useTransition()
+  const toastRef            = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Add-modal fields
+  const [title,     setTitle]     = useState("")
+  const [startMins, setStartMins] = useState(540)
+  const [endMins,   setEndMins]   = useState(600)
+  const [open,      setOpen]      = useState(true)
+  const [priv,      setPriv]      = useState(false)
+  const [location,  setLocation]  = useState("")
+  const [selCat,    setSelCat]    = useState<string | null>(null)
+  const [selColor,  setSelColor]  = useState<string | null>(null)
+  const [sugCat,    setSugCat]    = useState<string | null>(null)
+
+  // Auto-suggest category from title as user types
+  useEffect(() => {
+    const cat = suggestCategory(title)
+    setSugCat(cat?.name ?? null)
+    if (cat && !selCat) {
+      setSelCat(cat.name)
+      setSelColor(cat.color)
+    }
+    if (!cat && sugCat && selCat === sugCat) {
+      // clear suggestion that no longer matches
+      setSelCat(null)
+      setSelColor(null)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title])
 
   function showToast(msg: string) {
     setToast(msg)
-    if (toastTimer.current) clearTimeout(toastTimer.current)
-    toastTimer.current = setTimeout(() => setToast(null), 2500)
+    if (toastRef.current) clearTimeout(toastRef.current)
+    toastRef.current = setTimeout(() => setToast(null), 2500)
   }
 
-  function openModal(day: string, hour: number) {
-    setModal({ day, hour })
+  function openModal(day: string, slotMins: number) {
+    setModal({ day, slotMins })
     setTitle("")
-    setStartHour(hour)
-    setEndHour(Math.min(hour + 1, 23))
-    setType("group")
+    setStartMins(slotMins)
+    setEndMins(Math.min(slotMins + 60, END_MIN))
+    setOpen(true)
+    setPriv(false)
+    setLocation("")
+    setSelCat(null)
+    setSelColor(null)
+    setSugCat(null)
   }
 
   function handleAdd() {
     if (!modal || !title.trim()) return
-    startTransition(async () => {
+    const color = selColor || getCategoryColor(selCat)
+
+    startT(async () => {
       const result = await addTripActivity(tripId, {
-        date: modal.day,
-        startHour,
-        endHour,
-        title: title.trim(),
-        type,
+        date:      modal.day,
+        startMins,
+        endMins,
+        title:     title.trim(),
+        isOpen:    open,
+        isPrivate: priv,
+        category:  selCat,
+        color,
+        location:  location.trim() || null,
       })
       if (result?.error) {
-        showToast("Failed to add activity")
+        showToast(result.error)
       } else {
-        setLocalActivities((prev) => [
+        setLocal((prev) => [
           ...prev,
           {
-            id: crypto.randomUUID(),
-            date: modal.day,
-            startHour,
-            endHour,
-            title: title.trim(),
-            type,
-            createdBy: myUserId,
+            id:          crypto.randomUUID(),
+            date:        modal.day,
+            startMins,
+            endMins,
+            title:       title.trim(),
+            isOpen:      open ? 1 : 0,
+            isPrivate:   priv ? 1 : 0,
+            category:    selCat,
+            color,
+            location:    location.trim() || null,
+            createdBy:   myUserId,
+            attendees:   open ? [{ userId: myUserId, displayName: myDisplayName }] : [],
+            iAmAttending: open,
           },
         ])
         setModal(null)
@@ -103,17 +189,46 @@ export function ItineraryGrid({
   }
 
   function handleDelete(activityId: string) {
-    startTransition(async () => {
+    startT(async () => {
       const result = await deleteTripActivity(tripId, activityId)
       if (result?.error) {
-        showToast("Failed to delete activity")
+        showToast(result.error)
       } else {
-        setLocalActivities((prev) => prev.filter((a) => a.id !== activityId))
+        setLocal((prev) => prev.filter((a) => a.id !== activityId))
       }
     })
   }
 
-  const memberMap = Object.fromEntries(members.map((m) => [m.userId, m.displayName]))
+  function handleToggleJoin(activityId: string) {
+    // Optimistic update
+    setLocal((prev) =>
+      prev.map((a) => {
+        if (a.id !== activityId) return a
+        const joining = !a.iAmAttending
+        return {
+          ...a,
+          iAmAttending: joining,
+          attendees: joining
+            ? [...a.attendees, { userId: myUserId, displayName: myDisplayName }]
+            : a.attendees.filter((att) => att.userId !== myUserId),
+        }
+      })
+    )
+    startT(async () => {
+      await toggleActivityAttendance(activityId, tripId)
+    })
+  }
+
+  function handleUpdateCategory(activityId: string, category: string | null, color: string | null) {
+    setLocal((prev) =>
+      prev.map((a) => (a.id === activityId ? { ...a, category, color } : a))
+    )
+    startT(async () => {
+      await updateActivityCategory(activityId, tripId, category, color)
+    })
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <>
@@ -125,23 +240,23 @@ export function ItineraryGrid({
       )}
 
       {/* Legend */}
-      <div className="flex items-center gap-4 mb-4 text-xs text-gray-500">
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded bg-black inline-block" />Group activity
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded bg-gray-300 inline-block" />Personal
-        </span>
-        <span className="ml-auto text-gray-400">Tap an empty slot to add an activity</span>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4">
+        {DEFAULT_CATEGORIES.map((cat) => (
+          <span key={cat.name} className="flex items-center gap-1.5 text-xs text-gray-500">
+            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+            {cat.name}
+          </span>
+        ))}
+        <span className="ml-auto text-xs text-gray-400 hidden sm:block">Tap a slot to add</span>
       </div>
 
-      {/* Scrollable grid wrapper */}
+      {/* Scrollable grid */}
       <div className="overflow-x-auto rounded-xl border border-gray-200">
         <div
           className="grid"
           style={{
-            gridTemplateColumns: `52px repeat(${days.length}, minmax(120px, 1fr))`,
-            minWidth: `${52 + days.length * 120}px`,
+            gridTemplateColumns: `52px repeat(${days.length}, minmax(150px, 1fr))`,
+            minWidth: `${52 + days.length * 150}px`,
           }}
         >
           {/* Header row */}
@@ -149,78 +264,56 @@ export function ItineraryGrid({
           {days.map((day) => {
             const { weekday, date } = formatDay(day)
             return (
-              <div
-                key={day}
-                className="border-b border-r border-gray-200 p-2 text-center bg-gray-50 last:border-r-0"
-              >
+              <div key={day} className="border-b border-r border-gray-200 p-2 text-center bg-gray-50 last:border-r-0">
                 <p className="text-xs font-semibold text-gray-700">{weekday}</p>
                 <p className="text-xs text-gray-400">{date}</p>
               </div>
             )
           })}
 
-          {/* Hour rows */}
-          {HOURS.map((hour) => (
-            <React.Fragment key={hour}>
-              {/* Hour label */}
+          {/* Time slots */}
+          {SLOTS.map((slotMins) => (
+            <React.Fragment key={slotMins}>
+              {/* Time label — only on the hour */}
               <div
-                key={`label-${hour}`}
-                className="sticky left-0 z-10 bg-white border-r border-b border-gray-100 px-2 py-1 text-right"
+                className="sticky left-0 z-10 bg-white border-r border-b border-gray-100 px-2 flex items-start pt-1"
+                style={{ height: SLOT_HEIGHT }}
               >
-                <span className="text-xs text-gray-400">{formatHour(hour)}</span>
+                {slotMins % 60 === 0 && (
+                  <span className="text-xs text-gray-400 leading-none tabular-nums">
+                    {formatMins(slotMins)}
+                  </span>
+                )}
               </div>
 
               {/* Day cells */}
               {days.map((day) => {
-                const cellActivities = localActivities.filter(
-                  (a) => a.date === day && a.startHour === hour
+                const cellActs = local.filter(
+                  (a) => a.date === day && a.startMins === slotMins
                 )
                 return (
                   <div
-                    key={`${day}-${hour}`}
-                    className="border-r border-b border-gray-100 last:border-r-0 relative min-h-[44px] p-1 group cursor-pointer hover:bg-gray-50 transition-colors"
-                    onClick={() => openModal(day, hour)}
+                    key={`${day}-${slotMins}`}
+                    className="border-r border-b border-gray-100 last:border-r-0 relative group cursor-pointer hover:bg-gray-50/60 transition-colors"
+                    style={{ height: SLOT_HEIGHT }}
+                    onClick={() => openModal(day, slotMins)}
                   >
-                    {cellActivities.map((act) => {
-                      const spanRows = act.endHour - act.startHour
-                      const canDelete = act.createdBy === myUserId || isOrganizer
-                      return (
-                        <div
-                          key={act.id}
-                          onClick={(e) => e.stopPropagation()}
-                          className={`rounded px-1.5 py-1 mb-1 relative ${
-                            act.type === "group"
-                              ? "bg-black text-white"
-                              : "bg-gray-200 text-gray-800"
-                          }`}
-                          style={{ minHeight: `${spanRows * 44 - 4}px` }}
-                        >
-                          <p className="text-xs font-medium leading-tight truncate">{act.title}</p>
-                          {spanRows > 1 && (
-                            <p className="text-xs opacity-60 mt-0.5">
-                              {formatHour(act.startHour)}–{formatHour(act.endHour)}
-                            </p>
-                          )}
-                          {act.type === "personal" && (
-                            <p className="text-xs opacity-50 truncate">{memberMap[act.createdBy] ?? "Someone"}</p>
-                          )}
-                          {canDelete && (
-                            <button
-                              onClick={() => handleDelete(act.id)}
-                              className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 focus:opacity-100 p-0.5 rounded hover:bg-white/20"
-                              aria-label="Delete"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      )
-                    })}
-                    {/* Add hint on hover */}
-                    {cellActivities.length === 0 && (
-                      <span className="text-gray-300 text-xs opacity-0 group-hover:opacity-100 transition-opacity absolute inset-0 flex items-center justify-center select-none">
+                    {cellActs.map((act) => (
+                      <ActivityCard
+                        key={act.id}
+                        act={act}
+                        myUserId={myUserId}
+                        isOrganizer={isOrganizer}
+                        slotHeight={SLOT_HEIGHT}
+                        slotMins={SLOT_MINS}
+                        isPending={isPending}
+                        onDelete={handleDelete}
+                        onToggleJoin={handleToggleJoin}
+                        onUpdateCategory={handleUpdateCategory}
+                      />
+                    ))}
+                    {cellActs.length === 0 && (
+                      <span className="text-gray-300 text-xs opacity-0 group-hover:opacity-100 transition-opacity absolute inset-0 flex items-center justify-center select-none pointer-events-none">
                         +
                       </span>
                     )}
@@ -235,91 +328,337 @@ export function ItineraryGrid({
       {/* Add activity modal */}
       {modal && (
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:px-4">
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl p-6 w-full sm:max-w-sm shadow-xl">
-            <h2 className="font-semibold mb-4">Add activity</h2>
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm shadow-xl max-h-[92dvh] overflow-y-auto">
+            <div className="p-6 space-y-4">
+              <h2 className="font-semibold">Add activity</h2>
 
-            <div className="space-y-4">
+              {/* Title */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1.5">Title</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                  What&apos;s happening?
+                </label>
                 <input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Lunch at the market"
+                  placeholder="e.g. Morning surf lesson"
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black"
                   autoFocus
                   onKeyDown={(e) => { if (e.key === "Enter") handleAdd() }}
                 />
               </div>
 
+              {/* Category chips */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                  Category
+                  {sugCat && selCat === sugCat && (
+                    <span className="ml-1.5 font-normal text-gray-400">auto-suggested</span>
+                  )}
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {DEFAULT_CATEGORIES.map((cat) => {
+                    const active = selCat === cat.name
+                    return (
+                      <button
+                        key={cat.name}
+                        type="button"
+                        onClick={() => {
+                          if (active) {
+                            setSelCat(null)
+                            setSelColor(null)
+                          } else {
+                            setSelCat(cat.name)
+                            setSelColor(cat.color)
+                          }
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all"
+                        style={
+                          active
+                            ? { backgroundColor: cat.color, borderColor: cat.color, color: "#fff" }
+                            : { borderColor: "#e5e7eb", color: "#4b5563" }
+                        }
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: cat.color }}
+                        />
+                        {cat.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Time */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1.5">Start</label>
                   <select
-                    value={startHour}
+                    value={startMins}
                     onChange={(e) => {
                       const v = Number(e.target.value)
-                      setStartHour(v)
-                      if (endHour <= v) setEndHour(v + 1)
+                      setStartMins(v)
+                      if (endMins <= v) setEndMins(v + SLOT_MINS)
                     }}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black"
                   >
-                    {HOURS.map((h) => (
-                      <option key={h} value={h}>{formatHour(h)}</option>
+                    {TIME_OPTIONS.map(({ mins, label }) => (
+                      <option key={mins} value={mins}>{label}</option>
                     ))}
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1.5">End</label>
                   <select
-                    value={endHour}
-                    onChange={(e) => setEndHour(Number(e.target.value))}
+                    value={endMins}
+                    onChange={(e) => setEndMins(Number(e.target.value))}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black"
                   >
-                    {HOURS.filter((h) => h > startHour).map((h) => (
-                      <option key={h} value={h}>{formatHour(h)}</option>
-                    ))}
-                    <option value={23}>{formatHour(23)}</option>
+                    {TIME_OPTIONS
+                      .filter(({ mins }) => mins > startMins)
+                      .map(({ mins, label }) => (
+                        <option key={mins} value={mins}>{label}</option>
+                      ))}
                   </select>
                 </div>
               </div>
 
+              {/* Location */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1.5">Who?</label>
-                <div className="flex gap-2">
-                  {(["group", "personal"] as const).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setType(t)}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-all ${
-                        type === t ? "bg-black text-white border-black" : "border-gray-200 text-gray-600 hover:border-gray-400"
-                      }`}
-                    >
-                      {t === "group" ? "Group" : "Just me"}
-                    </button>
-                  ))}
-                </div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                  Location <span className="font-normal text-gray-400">(optional)</span>
+                </label>
+                <input
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="e.g. Playa Los Muertos"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                />
               </div>
-            </div>
 
-            <div className="flex gap-2 mt-5">
-              <button
-                onClick={() => setModal(null)}
-                className="flex-1 py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAdd}
-                disabled={isPending || !title.trim()}
-                className="flex-1 py-2 bg-black text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
-              >
-                {isPending ? "Adding…" : "Add"}
-              </button>
+              {/* Toggles */}
+              <div className="space-y-3 pt-1">
+                <Toggle
+                  label="Open to others joining"
+                  description="Members can RSVP to join"
+                  value={open}
+                  onChange={(v) => {
+                    setOpen(v)
+                    if (v) setPriv(false)
+                  }}
+                />
+                {!open && (
+                  <Toggle
+                    label="Private"
+                    description="Only visible to you"
+                    value={priv}
+                    onChange={setPriv}
+                  />
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setModal(null)}
+                  className="flex-1 py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAdd}
+                  disabled={isPending || !title.trim()}
+                  className="flex-1 py-2 bg-black text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
+                >
+                  {isPending ? "Adding…" : "Add"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
     </>
+  )
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function Toggle({
+  label,
+  description,
+  value,
+  onChange,
+}: {
+  label: string
+  description: string
+  value: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div>
+        <p className="text-sm font-medium text-gray-800">{label}</p>
+        <p className="text-xs text-gray-400">{description}</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={value}
+        onClick={() => onChange(!value)}
+        className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-1 ${value ? "bg-black" : "bg-gray-200"}`}
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${value ? "translate-x-5" : ""}`}
+        />
+      </button>
+    </div>
+  )
+}
+
+function ActivityCard({
+  act,
+  myUserId,
+  isOrganizer,
+  slotHeight,
+  slotMins,
+  isPending,
+  onDelete,
+  onToggleJoin,
+  onUpdateCategory,
+}: {
+  act: Activity
+  myUserId: string
+  isOrganizer: boolean
+  slotHeight: number
+  slotMins: number
+  isPending: boolean
+  onDelete: (id: string) => void
+  onToggleJoin: (id: string) => void
+  onUpdateCategory: (id: string, cat: string | null, color: string | null) => void
+}) {
+  const [showCatPicker, setShowCatPicker] = useState(false)
+
+  const span      = Math.max(1, (act.endMins - act.startMins) / slotMins)
+  const color     = cardColor(act)
+  const canDelete = act.createdBy === myUserId || isOrganizer
+  const canEdit   = isOpen(act) || act.createdBy === myUserId
+  const private_  = isPrivate(act)
+  const open_     = isOpen(act)
+
+  const cardHeight = span * slotHeight - 4
+
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className={`absolute left-1 right-1 top-0.5 rounded-md border-l-[3px] shadow-sm overflow-hidden transition-opacity ${private_ ? "opacity-60" : ""}`}
+      style={{
+        height: cardHeight,
+        borderLeftColor: color,
+        backgroundColor: `${color}1A`,
+        zIndex: 5,
+      }}
+    >
+      <div className="px-1.5 py-1 h-full flex flex-col">
+        {/* Title row */}
+        <div className="flex items-start gap-0.5 min-w-0">
+          {/* Category dot — tappable to change */}
+          {canEdit && (
+            <button
+              onClick={() => setShowCatPicker((p) => !p)}
+              className="flex-shrink-0 mt-0.5 w-2.5 h-2.5 rounded-full ring-1 ring-white/50 hover:scale-125 transition-transform"
+              style={{ backgroundColor: color }}
+              title="Change category"
+            />
+          )}
+          <p className="flex-1 text-xs font-semibold text-gray-800 leading-tight truncate ml-1 min-w-0">
+            {private_ && <span className="mr-0.5 opacity-60">🔒</span>}
+            {act.title}
+          </p>
+          {canDelete && (
+            <button
+              onClick={() => onDelete(act.id)}
+              className="flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 p-0.5 rounded hover:bg-black/10 transition-opacity ml-0.5"
+              aria-label="Delete activity"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* Time range */}
+        {span >= 1 && (
+          <p className="text-[10px] text-gray-500 leading-tight mt-0.5 tabular-nums">
+            {minsRange(act.startMins, act.endMins)}
+          </p>
+        )}
+
+        {/* Location */}
+        {act.location && span >= 2 && (
+          <p className="text-[10px] text-gray-400 leading-tight truncate mt-0.5">
+            📍 {act.location}
+          </p>
+        )}
+
+        {/* Join / attendees */}
+        {open_ && span >= 2 && (
+          <div className="flex items-center justify-between mt-auto pt-0.5">
+            <span className="text-[10px] text-gray-400">
+              {act.attendees.length > 0
+                ? `${act.attendees.length} joining`
+                : "No one yet"}
+            </span>
+            <button
+              onClick={() => onToggleJoin(act.id)}
+              disabled={isPending}
+              className={`text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors disabled:opacity-50 ${
+                act.iAmAttending
+                  ? "bg-green-100 text-green-700"
+                  : "bg-white/70 text-gray-600 hover:bg-white"
+              }`}
+            >
+              {act.iAmAttending ? "✓ In" : "+ Join"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Category picker popover */}
+      {showCatPicker && (
+        <div
+          className="absolute left-0 top-full mt-1 z-20 bg-white rounded-xl shadow-xl border border-gray-100 p-2 flex flex-wrap gap-1.5 w-48"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {DEFAULT_CATEGORIES.map((cat) => (
+            <button
+              key={cat.name}
+              onClick={() => {
+                onUpdateCategory(act.id, cat.name, cat.color)
+                setShowCatPicker(false)
+              }}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border transition-all hover:border-gray-400"
+              style={
+                act.category === cat.name
+                  ? { backgroundColor: cat.color, borderColor: cat.color, color: "#fff" }
+                  : { borderColor: "#e5e7eb", color: "#374151" }
+              }
+            >
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
+              {cat.name}
+            </button>
+          ))}
+          <button
+            onClick={() => {
+              onUpdateCategory(act.id, null, null)
+              setShowCatPicker(false)
+            }}
+            className="px-2 py-1 rounded-full text-xs border border-dashed border-gray-200 text-gray-400 hover:border-gray-400"
+          >
+            None
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
