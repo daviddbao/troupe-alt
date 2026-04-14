@@ -1,5 +1,6 @@
 import { getTripWithMembers, getExistingInvite, getUserAvailability, getTripAggregateAvailability } from "@/lib/actions/trips"
 import { auth } from "@/lib/auth"
+import { headers } from "next/headers"
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { InviteSection } from "@/components/trips/invite-section"
@@ -54,7 +55,10 @@ export default async function TripPage({ params, searchParams }: Props) {
   const submittedCount = members.filter((m) => submittedUserIds.has(m.userId)).length
   const bestWindows = aggregate?.bestWindows ?? []
   const minNights = aggregate?.minNights ?? 1
-  const baseUrl = process.env.NEXTAUTH_URL ?? ""
+  const hdrs = await headers()
+  const host = hdrs.get("host") ?? ""
+  const proto = hdrs.get("x-forwarded-proto") ?? "https"
+  const baseUrl = host ? `${proto}://${host}` : (process.env.NEXTAUTH_URL ?? "")
   const isScheduled = !!(trip.scheduledStart && trip.scheduledEnd)
 
   return (

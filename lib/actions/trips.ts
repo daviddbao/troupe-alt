@@ -3,7 +3,7 @@
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { trips, tripMembers, tripInvites, profiles, availabilityBlocks, tripActivities, activityAttendees } from "@/lib/db/schema"
-import { eq, and, inArray } from "drizzle-orm"
+import { eq, and, inArray, desc } from "drizzle-orm"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import type { TripPreferences } from "@/lib/db/schema"
@@ -65,6 +65,7 @@ export async function getUserTrips() {
     .from(tripMembers)
     .innerJoin(trips, eq(tripMembers.tripId, trips.id))
     .where(eq(tripMembers.userId, session.user.id))
+    .orderBy(desc(trips.createdAt))
 
   if (rows.length === 0) return []
 
@@ -178,6 +179,7 @@ export async function savePreferences(
     )
 
   if (!membership) return { error: "Not a member of this trip." }
+  if (membership.role !== "organizer") return { error: "Only the organizer can set preferences." }
 
   await db.update(trips).set({ preferences: prefs }).where(eq(trips.id, tripId))
 

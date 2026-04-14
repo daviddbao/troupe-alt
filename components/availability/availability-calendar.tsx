@@ -164,14 +164,17 @@ export function AvailabilityCalendar({ tripId, savedDates }: Props) {
   }, [eraseMode, previewRange, selected])
 
   const previewStartDate = useMemo(() => {
-    if (eraseMode || !previewRange.start) return []
-    return [fromIso(previewRange.start)]
-  }, [eraseMode, previewRange])
+    if (eraseMode) return []
+    const unselected = previewRange.all.filter((d) => !selected.includes(d)).sort()
+    return unselected.length > 0 ? [fromIso(unselected[0])] : []
+  }, [eraseMode, previewRange, selected])
 
   const previewEndDate = useMemo(() => {
-    if (eraseMode || !previewRange.end || previewRange.end === previewRange.start) return []
-    return [fromIso(previewRange.end)]
-  }, [eraseMode, previewRange])
+    if (eraseMode) return []
+    const unselected = previewRange.all.filter((d) => !selected.includes(d)).sort()
+    if (unselected.length <= 1) return []
+    return [fromIso(unselected[unselected.length - 1])]
+  }, [eraseMode, previewRange, selected])
 
   const erasePreviewDates = useMemo(() => {
     if (!eraseMode || !rangeAnchor || !hoverDate) return []
