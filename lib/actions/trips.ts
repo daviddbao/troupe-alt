@@ -6,7 +6,7 @@ import { trips, tripMembers, tripInvites, profiles, availabilityBlocks, tripActi
 import { eq, and, inArray, desc } from "drizzle-orm"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
-import type { TripPreferences } from "@/lib/db/schema"
+import type { TripPreferences, TripStatus } from "@/lib/db/schema"
 
 export async function createTrip(
   _prevState: { error?: string } | undefined,
@@ -355,6 +355,21 @@ export async function scheduleTripDates(tripId: string, startDate: string, endDa
     .set({ scheduledStart: startDate, scheduledEnd: endDate })
     .where(eq(trips.id, tripId))
 
+  revalidatePath(`/trips/${tripId}`)
+}
+
+export async function updateTripStatus(tripId: string, status: TripStatus) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+
+  if (membership?.role !== "organizer") return { error: "Only the organizer can update trip status." }
+
+  await db.update(trips).set({ status }).where(eq(trips.id, tripId))
   revalidatePath(`/trips/${tripId}`)
 }
 

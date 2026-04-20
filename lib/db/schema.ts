@@ -18,6 +18,8 @@ export const profiles = pgTable("profiles", {
   createdAt: timestamp("created_at").defaultNow(),
 })
 
+export type TripStatus = "planning" | "booking" | "during" | "post"
+
 export const trips = pgTable("trips", {
   id: text("id")
     .primaryKey()
@@ -29,6 +31,7 @@ export const trips = pgTable("trips", {
   preferences: json("preferences").$type<TripPreferences>(),
   scheduledStart: text("scheduled_start"), // ISO date YYYY-MM-DD, null = not yet scheduled
   scheduledEnd: text("scheduled_end"),     // ISO date YYYY-MM-DD
+  status: text("status").$type<TripStatus>().notNull().default("planning"),
   createdAt: timestamp("created_at").defaultNow(),
 })
 

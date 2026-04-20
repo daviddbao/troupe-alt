@@ -7,6 +7,8 @@ import { InviteSection } from "@/components/trips/invite-section"
 import { AggregateCalendarClient } from "@/components/availability/aggregate-calendar-client"
 import { ScheduleTrip } from "@/components/trips/schedule-trip"
 import { TripActions } from "@/components/trips/trip-actions"
+import { TripStatus } from "@/components/trips/trip-status"
+import type { TripStatus as TripStatusType } from "@/lib/db/schema"
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ joined?: string }> }
 
@@ -60,6 +62,7 @@ export default async function TripPage({ params, searchParams }: Props) {
   const proto = hdrs.get("x-forwarded-proto") ?? "https"
   const baseUrl = host ? `${proto}://${host}` : (process.env.NEXTAUTH_URL ?? "")
   const isScheduled = !!(trip.scheduledStart && trip.scheduledEnd)
+  const tripStatus = (trip.status ?? "planning") as TripStatusType
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 space-y-4">
@@ -70,7 +73,15 @@ export default async function TripPage({ params, searchParams }: Props) {
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </Link>
-        <h1 className="text-xl font-semibold flex-1">{trip.name}</h1>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl font-semibold">{trip.name}</h1>
+          <TripStatus
+            tripId={id}
+            status={tripStatus}
+            isOrganizer={isOrganizer}
+            isScheduled={isScheduled}
+          />
+        </div>
         <TripActions tripId={id} tripName={trip.name} isOrganizer={isOrganizer} members={members} myUserId={session?.user?.id ?? ""} />
       </div>
 
