@@ -147,6 +147,25 @@ export const memberFlights = pgTable("member_flights", {
   createdAt: timestamp("created_at").defaultNow(),
 })
 
+export const hotelStays = pgTable("hotel_stays", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  tripId: text("trip_id")
+    .notNull()
+    .references(() => trips.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  address: text("address"),
+  checkIn: text("check_in").notNull(),   // "YYYY-MM-DD"
+  checkOut: text("check_out").notNull(), // "YYYY-MM-DD"
+  confirmationNumber: text("confirmation_number"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+})
+
 export const tripInvites = pgTable("trip_invites", {
   id: text("id")
     .primaryKey()

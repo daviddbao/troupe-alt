@@ -1,8 +1,8 @@
-import { getTripWithMembers, getTripActivities, getMemberFlights } from "@/lib/actions/trips"
+import { getTripWithMembers, getTripActivities, getMemberFlights, getHotelStays } from "@/lib/actions/trips"
 import { auth } from "@/lib/auth"
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { ItineraryGrid, type FlightBlock } from "@/components/trips/itinerary-grid"
+import { ItineraryGrid, type FlightBlock, type HotelBlock } from "@/components/trips/itinerary-grid"
 
 type Props = { params: Promise<{ id: string }> }
 
@@ -31,7 +31,6 @@ function buildFlightBlocks(
   flights: Awaited<ReturnType<typeof getMemberFlights>>,
   scheduledStart: string
 ): FlightBlock[] {
-  // Group by flightNumber (normalized) + departure date
   const groups = new Map<string, typeof flights>()
   for (const f of flights) {
     const key = `${f.flightNumber.toUpperCase()}|${isoDateOf(f.departureAt)}`
@@ -65,13 +64,42 @@ function buildFlightBlocks(
   return blocks
 }
 
+function buildHotelBlocks(
+  hotels: Awaited<ReturnType<typeof getHotelStays>>,
+  scheduledStart: string
+): HotelBlock[] {
+  // Group by hotel name + check-in so shared hotels become one block
+  const groups = new Map<string, typeof hotels>()
+  for (const h of hotels) {
+    const key = `${h.name.toLowerCase()}|${h.checkIn}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(h)
+  }
+
+  const blocks: HotelBlock[] = []
+  for (const [, group] of groups) {
+    const h = group[0]
+    blocks.push({
+      key: `${h.name}|${h.checkIn}`,
+      name: h.name,
+      address: h.address,
+      startOffset: daysBetween(scheduledStart, h.checkIn),
+      endOffset: daysBetween(scheduledStart, h.checkOut),
+      members: group.map((g) => g.displayName),
+    })
+  }
+
+  return blocks
+}
+
 export default async function ItineraryPage({ params }: Props) {
   const { id } = await params
-  const [session, data, activities, flights] = await Promise.all([
+  const [session, data, activities, flights, hotels] = await Promise.all([
     auth(),
     getTripWithMembers(id),
     getTripActivities(id),
     getMemberFlights(id),
+    getHotelStays(id),
   ])
 
   if (!data) notFound()
@@ -92,6 +120,10 @@ export default async function ItineraryPage({ params }: Props) {
 
   const flightBlocks = trip.scheduledStart
     ? buildFlightBlocks(flights, trip.scheduledStart)
+    : []
+
+  const hotelBlocks = trip.scheduledStart
+    ? buildHotelBlocks(hotels, trip.scheduledStart)
     : []
 
   return (
@@ -119,6 +151,7 @@ export default async function ItineraryPage({ params }: Props) {
         scheduledStart={trip.scheduledStart ?? null}
         activities={activities}
         flightBlocks={flightBlocks}
+        hotelBlocks={hotelBlocks}
         myUserId={myUserId}
         isOrganizer={isOrganizer}
         members={members}

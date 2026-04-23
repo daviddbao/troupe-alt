@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { trips, tripMembers, tripInvites, profiles, availabilityBlocks, tripActivities, activityAttendees, tripIdeas, packingItems, packingChecks, memberFlights } from "@/lib/db/schema"
+import { trips, tripMembers, tripInvites, profiles, availabilityBlocks, tripActivities, activityAttendees, tripIdeas, packingItems, packingChecks, memberFlights, hotelStays } from "@/lib/db/schema"
 import { eq, and, inArray, desc } from "drizzle-orm"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
@@ -954,6 +954,96 @@ export async function deleteMemberFlight(tripId: string, flightId: string) {
   }
 
   await db.delete(memberFlights).where(eq(memberFlights.id, flightId))
+  revalidatePath(`/trips/${tripId}`)
+  revalidatePath(`/trips/${tripId}/itinerary`)
+}
+
+export async function getHotelStays(tripId: string) {
+  const session = await auth()
+  if (!session?.user?.id) return []
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return []
+
+  return db
+    .select({
+      id: hotelStays.id,
+      userId: hotelStays.userId,
+      displayName: profiles.displayName,
+      name: hotelStays.name,
+      address: hotelStays.address,
+      checkIn: hotelStays.checkIn,
+      checkOut: hotelStays.checkOut,
+      confirmationNumber: hotelStays.confirmationNumber,
+      notes: hotelStays.notes,
+    })
+    .from(hotelStays)
+    .innerJoin(profiles, eq(hotelStays.userId, profiles.id))
+    .where(eq(hotelStays.tripId, tripId))
+    .orderBy(hotelStays.checkIn)
+}
+
+export async function addHotelStay(
+  tripId: string,
+  data: {
+    name: string
+    address?: string
+    checkIn: string
+    checkOut: string
+    confirmationNumber?: string
+    notes?: string
+  }
+) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return { error: "Not a member of this trip." }
+
+  if (!data.name.trim()) return { error: "Hotel name is required." }
+  if (!data.checkIn || !data.checkOut) return { error: "Check-in and check-out dates are required." }
+  if (data.checkIn >= data.checkOut) return { error: "Check-out must be after check-in." }
+
+  await db.insert(hotelStays).values({
+    tripId,
+    userId: session.user.id,
+    name: data.name.trim(),
+    address: data.address?.trim() || null,
+    checkIn: data.checkIn,
+    checkOut: data.checkOut,
+    confirmationNumber: data.confirmationNumber?.trim() || null,
+    notes: data.notes?.trim() || null,
+  })
+
+  revalidatePath(`/trips/${tripId}`)
+  revalidatePath(`/trips/${tripId}/itinerary`)
+}
+
+export async function deleteHotelStay(tripId: string, hotelId: string) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const [hotel] = await db
+    .select()
+    .from(hotelStays)
+    .where(and(eq(hotelStays.id, hotelId), eq(hotelStays.tripId, tripId)))
+  if (!hotel) return { error: "Hotel not found." }
+
+  if (hotel.userId !== session.user.id) {
+    const [membership] = await db
+      .select()
+      .from(tripMembers)
+      .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+    if (membership?.role !== "organizer") return { error: "You can only delete your own hotels." }
+  }
+
+  await db.delete(hotelStays).where(eq(hotelStays.id, hotelId))
   revalidatePath(`/trips/${tripId}`)
   revalidatePath(`/trips/${tripId}/itinerary`)
 }

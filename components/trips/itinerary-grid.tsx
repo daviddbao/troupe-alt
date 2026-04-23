@@ -60,6 +60,16 @@ export type FlightBlock = {
   overnight: boolean      // arrives next day
 }
 
+// Hotels pre-processed by the page: offset-relative, spans multiple days
+export type HotelBlock = {
+  key: string
+  name: string
+  address: string | null
+  startOffset: number    // check-in day offset
+  endOffset: number      // check-out day offset (exclusive)
+  members: string[]      // display names of people at this hotel
+}
+
 type Activity = {
   id: string
   dayOffset: number
@@ -94,6 +104,7 @@ export function ItineraryGrid({
   scheduledStart,
   activities: initial,
   flightBlocks = [],
+  hotelBlocks = [],
   myUserId,
   isOrganizer,
   members,
@@ -104,6 +115,7 @@ export function ItineraryGrid({
   scheduledStart: string | null
   activities: Activity[]
   flightBlocks?: FlightBlock[]
+  hotelBlocks?: HotelBlock[]
   myUserId: string
   isOrganizer: boolean
   members: Member[]
@@ -299,6 +311,31 @@ export function ItineraryGrid({
               </div>
             )
           })}
+
+          {/* Hotel bar row — only shown when hotels exist */}
+          {hotelBlocks.length > 0 && (
+            <>
+              <div className="sticky left-0 z-10 bg-white border-b border-r border-gray-200 px-2 py-1.5 flex items-center">
+                <span className="text-xs text-gray-400">Hotel</span>
+              </div>
+              {Array.from({ length: dayCount }, (_, i) => i).map((offset) => {
+                const hotels = hotelBlocks.filter((h) => h.startOffset <= offset && offset < h.endOffset)
+                return (
+                  <div key={offset} className="border-b border-r border-gray-200 last:border-r-0 p-1 space-y-0.5 bg-white">
+                    {hotels.map((h) => (
+                      <div
+                        key={h.key}
+                        className="bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 text-xs text-amber-800 truncate"
+                        title={`${h.name}${h.members.length > 1 ? ` · ${h.members.join(", ")}` : ""}`}
+                      >
+                        {offset === h.startOffset ? `▶ ${h.name}` : offset === h.endOffset - 1 ? `${h.name} ◀` : h.name}
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
+            </>
+          )}
 
           {/* Time slots */}
           {SLOTS.map((slotMins) => (
