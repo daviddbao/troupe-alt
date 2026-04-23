@@ -45,8 +45,8 @@
 
 ## Not Yet Built — Booking/During/Post Stages
 These status labels exist but have no dedicated features yet:
-- [ ] **Packing list**: per-trip shared checklist, each person marks their items as packed (optional to fill in)
-- [ ] **Flight info**: each member inputs flight details (airline, number, arrival/departure) → auto-creates itinerary block; shared flight number deduplication shows one block with multiple people
+- [x] **Packing list**: per-trip shared checklist, each person marks their items as packed (optional to fill in)
+- [x] **Flight info**: each member inputs flight details (airline, number, arrival/departure) → auto-creates itinerary block; shared flight number deduplication shows one block with multiple people
 - [ ] **Hotel info**: check-in/checkout dates + name/address → auto-creates itinerary block
 - [ ] **Email parsing for flights/hotels** (future): forward confirmation email to trip address → auto-fills fields. Needs inbound email webhook (Postmark/SendGrid). Technically feasible, medium overhead.
 - [ ] **Booking stage**: hotel/flight logging, booking confirmation tracking
