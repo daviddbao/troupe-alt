@@ -1,4 +1,4 @@
-import { getTripWithMembers, getExistingInvite, getUserAvailability, getTripAggregateAvailability, getTripIdeas } from "@/lib/actions/trips"
+import { getTripWithMembers, getExistingInvite, getUserAvailability, getTripAggregateAvailability, getTripIdeas, getPackingList } from "@/lib/actions/trips"
 import { auth } from "@/lib/auth"
 import { headers } from "next/headers"
 import { notFound } from "next/navigation"
@@ -9,6 +9,7 @@ import { ScheduleTrip } from "@/components/trips/schedule-trip"
 import { TripActions } from "@/components/trips/trip-actions"
 import { TripStatus } from "@/components/trips/trip-status"
 import { IdeasBoard } from "@/components/trips/ideas-board"
+import { PackingList } from "@/components/trips/packing-list"
 import type { TripStatus as TripStatusType } from "@/lib/db/schema"
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ joined?: string }> }
@@ -40,13 +41,14 @@ function formatScheduledDates(start: string, end: string) {
 
 export default async function TripPage({ params, searchParams }: Props) {
   const [{ id }, { joined }] = await Promise.all([params, searchParams])
-  const [session, data, myDates, existingInviteCode, aggregate, ideas] = await Promise.all([
+  const [session, data, myDates, existingInviteCode, aggregate, ideas, packingList] = await Promise.all([
     auth(),
     getTripWithMembers(id),
     getUserAvailability(id),
     getExistingInvite(id),
     getTripAggregateAvailability(id),
     getTripIdeas(id),
+    getPackingList(id),
   ])
 
   if (!data) notFound()
@@ -298,6 +300,15 @@ export default async function TripPage({ params, searchParams }: Props) {
           <p className="text-sm text-gray-400">No preferences set yet.</p>
         )}
       </div>
+
+      {/* Packing list */}
+      <PackingList
+        tripId={id}
+        initialItems={packingList}
+        myUserId={session?.user?.id ?? ""}
+        isOrganizer={isOrganizer}
+        members={members.map((m) => ({ userId: m.userId, displayName: m.displayName }))}
+      />
 
       {/* Ideas board */}
       <IdeasBoard

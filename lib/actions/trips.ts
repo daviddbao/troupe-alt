@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { trips, tripMembers, tripInvites, profiles, availabilityBlocks, tripActivities, activityAttendees, tripIdeas } from "@/lib/db/schema"
+import { trips, tripMembers, tripInvites, profiles, availabilityBlocks, tripActivities, activityAttendees, tripIdeas, packingItems, packingChecks } from "@/lib/db/schema"
 import { eq, and, inArray, desc } from "drizzle-orm"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
@@ -760,5 +760,107 @@ export async function deleteTripIdea(tripId: string, ideaId: string) {
   }
 
   await db.delete(tripIdeas).where(eq(tripIdeas.id, ideaId))
+  revalidatePath(`/trips/${tripId}`)
+}
+
+export async function getPackingList(tripId: string) {
+  const session = await auth()
+  if (!session?.user?.id) return []
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return []
+
+  const items = await db
+    .select({
+      id: packingItems.id,
+      label: packingItems.label,
+      createdBy: packingItems.createdBy,
+      creatorName: profiles.displayName,
+      createdAt: packingItems.createdAt,
+    })
+    .from(packingItems)
+    .innerJoin(profiles, eq(packingItems.createdBy, profiles.id))
+    .where(eq(packingItems.tripId, tripId))
+    .orderBy(packingItems.createdAt)
+
+  if (items.length === 0) return []
+
+  const checks = await db
+    .select()
+    .from(packingChecks)
+    .where(inArray(packingChecks.itemId, items.map((i) => i.id)))
+
+  return items.map((item) => ({
+    ...item,
+    packedByIds: checks.filter((c) => c.itemId === item.id).map((c) => c.userId),
+    iPackedIt: checks.some((c) => c.itemId === item.id && c.userId === session.user!.id),
+  }))
+}
+
+export async function addPackingItem(tripId: string, label: string) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return { error: "Not a member of this trip." }
+
+  const trimmed = label.trim()
+  if (!trimmed) return { error: "Item cannot be empty." }
+
+  await db.insert(packingItems).values({ tripId, createdBy: session.user.id, label: trimmed })
+  revalidatePath(`/trips/${tripId}`)
+}
+
+export async function deletePackingItem(tripId: string, itemId: string) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const [item] = await db
+    .select()
+    .from(packingItems)
+    .where(and(eq(packingItems.id, itemId), eq(packingItems.tripId, tripId)))
+  if (!item) return { error: "Item not found." }
+
+  if (item.createdBy !== session.user.id) {
+    const [membership] = await db
+      .select()
+      .from(tripMembers)
+      .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+    if (membership?.role !== "organizer") return { error: "You can only delete your own items." }
+  }
+
+  await db.delete(packingItems).where(eq(packingItems.id, itemId))
+  revalidatePath(`/trips/${tripId}`)
+}
+
+export async function togglePackingCheck(tripId: string, itemId: string) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return { error: "Not a member of this trip." }
+
+  const [existing] = await db
+    .select()
+    .from(packingChecks)
+    .where(and(eq(packingChecks.itemId, itemId), eq(packingChecks.userId, session.user.id)))
+
+  if (existing) {
+    await db
+      .delete(packingChecks)
+      .where(and(eq(packingChecks.itemId, itemId), eq(packingChecks.userId, session.user.id)))
+  } else {
+    await db.insert(packingChecks).values({ itemId, userId: session.user.id })
+  }
+
   revalidatePath(`/trips/${tripId}`)
 }

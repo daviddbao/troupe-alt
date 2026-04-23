@@ -104,6 +104,29 @@ export const tripIdeas = pgTable("trip_ideas", {
   createdAt: timestamp("created_at").defaultNow(),
 })
 
+export const packingItems = pgTable("packing_items", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  tripId: text("trip_id")
+    .notNull()
+    .references(() => trips.id, { onDelete: "cascade" }),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => profiles.id),
+  label: text("label").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+})
+
+export const packingChecks = pgTable("packing_checks", {
+  itemId: text("item_id")
+    .notNull()
+    .references(() => packingItems.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+})
+
 export const tripInvites = pgTable("trip_invites", {
   id: text("id")
     .primaryKey()
