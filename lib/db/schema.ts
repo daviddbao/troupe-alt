@@ -70,14 +70,14 @@ export const tripActivities = pgTable("trip_activities", {
   createdBy: text("created_by")
     .notNull()
     .references(() => profiles.id),
-  date: text("date").notNull(),
-  startMins: integer("start_mins").notNull(), // minutes from midnight, e.g. 570 = 9:30am
+  dayOffset: integer("day_offset").notNull().default(0), // 0 = Day 1
+  startMins: integer("start_mins").notNull(),
   endMins: integer("end_mins").notNull(),
   title: text("title").notNull(),
-  isOpen: integer("is_open").notNull().default(1),   // 1 = others can join (default)
-  isPrivate: integer("is_private").notNull().default(0), // 1 = only visible to creator
+  isOpen: integer("is_open").notNull().default(1),
+  isPrivate: integer("is_private").notNull().default(0),
   category: text("category"),
-  color: text("color"),   // hex override; falls back to category default
+  color: text("color"),
   location: text("location"),
 })
 
@@ -88,6 +88,20 @@ export const activityAttendees = pgTable("activity_attendees", {
   userId: text("user_id")
     .notNull()
     .references(() => profiles.id, { onDelete: "cascade" }),
+})
+
+export const tripIdeas = pgTable("trip_ideas", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  tripId: text("trip_id")
+    .notNull()
+    .references(() => trips.id, { onDelete: "cascade" }),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => profiles.id),
+  text: text("text").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
 })
 
 export const tripInvites = pgTable("trip_invites", {

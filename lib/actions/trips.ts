@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { trips, tripMembers, tripInvites, profiles, availabilityBlocks, tripActivities, activityAttendees } from "@/lib/db/schema"
+import { trips, tripMembers, tripInvites, profiles, availabilityBlocks, tripActivities, activityAttendees, tripIdeas } from "@/lib/db/schema"
 import { eq, and, inArray, desc } from "drizzle-orm"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
@@ -503,7 +503,7 @@ export async function getTripActivities(tripId: string) {
   const acts = await db
     .select({
       id: tripActivities.id,
-      date: tripActivities.date,
+      dayOffset: tripActivities.dayOffset,
       startMins: tripActivities.startMins,
       endMins: tripActivities.endMins,
       title: tripActivities.title,
@@ -553,7 +553,7 @@ export async function getTripActivities(tripId: string) {
 export async function addTripActivity(
   tripId: string,
   activity: {
-    date: string
+    dayOffset: number
     startMins: number
     endMins: number
     title: string
@@ -582,7 +582,7 @@ export async function addTripActivity(
   const [inserted] = await db.insert(tripActivities).values({
     tripId,
     createdBy: session.user.id,
-    date: activity.date,
+    dayOffset: activity.dayOffset,
     startMins: activity.startMins,
     endMins: activity.endMins,
     title: activity.title.trim(),
@@ -698,4 +698,67 @@ export async function updateActivityCategory(
     .where(eq(tripActivities.id, activityId))
 
   revalidatePath(`/trips/${tripId}/itinerary`)
+}
+
+export async function getTripIdeas(tripId: string) {
+  const session = await auth()
+  if (!session?.user?.id) return []
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return []
+
+  return db
+    .select({
+      id: tripIdeas.id,
+      text: tripIdeas.text,
+      createdBy: tripIdeas.createdBy,
+      creatorName: profiles.displayName,
+      createdAt: tripIdeas.createdAt,
+    })
+    .from(tripIdeas)
+    .innerJoin(profiles, eq(tripIdeas.createdBy, profiles.id))
+    .where(eq(tripIdeas.tripId, tripId))
+    .orderBy(tripIdeas.createdAt)
+}
+
+export async function addTripIdea(tripId: string, text: string) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return { error: "Not a member of this trip." }
+
+  const trimmed = text.trim()
+  if (!trimmed) return { error: "Idea cannot be empty." }
+
+  await db.insert(tripIdeas).values({ tripId, createdBy: session.user.id, text: trimmed })
+  revalidatePath(`/trips/${tripId}`)
+}
+
+export async function deleteTripIdea(tripId: string, ideaId: string) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const [idea] = await db
+    .select()
+    .from(tripIdeas)
+    .where(and(eq(tripIdeas.id, ideaId), eq(tripIdeas.tripId, tripId)))
+  if (!idea) return { error: "Idea not found." }
+
+  if (idea.createdBy !== session.user.id) {
+    const [membership] = await db
+      .select()
+      .from(tripMembers)
+      .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+    if (membership?.role !== "organizer") return { error: "You can only delete your own ideas." }
+  }
+
+  await db.delete(tripIdeas).where(eq(tripIdeas.id, ideaId))
+  revalidatePath(`/trips/${tripId}`)
 }

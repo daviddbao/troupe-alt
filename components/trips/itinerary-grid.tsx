@@ -37,12 +37,10 @@ function minsRange(start: number, end: number) {
   return `${formatMins(start)}–${formatMins(end)}`
 }
 
-function formatDay(iso: string) {
-  const d = new Date(iso + "T00:00:00")
-  return {
-    weekday: d.toLocaleDateString("en-US", { weekday: "short" }),
-    date:    d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-  }
+function offsetToActualDate(scheduledStart: string, offset: number): string {
+  const d = new Date(scheduledStart + "T00:00:00")
+  d.setDate(d.getDate() + offset)
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -51,7 +49,7 @@ type Attendee = { userId: string; displayName: string }
 
 type Activity = {
   id: string
-  date: string
+  dayOffset: number
   startMins: number
   endMins: number
   title: string
@@ -78,14 +76,18 @@ function cardColor(a: Activity): string {
 
 export function ItineraryGrid({
   tripId,
-  days,
+  dayCount,
+  scheduledDays,
+  scheduledStart,
   activities: initial,
   myUserId,
   isOrganizer,
   members,
 }: {
   tripId: string
-  days: string[]
+  dayCount: number
+  scheduledDays: number       // 0 = not scheduled; otherwise trip length in days
+  scheduledStart: string | null
   activities: Activity[]
   myUserId: string
   isOrganizer: boolean
@@ -94,7 +96,7 @@ export function ItineraryGrid({
   const myDisplayName = members.find((m) => m.userId === myUserId)?.displayName ?? ""
 
   const [local, setLocal]   = useState<Activity[]>(initial)
-  const [modal, setModal]   = useState<{ day: string; slotMins: number } | null>(null)
+  const [modal, setModal]   = useState<{ dayOffset: number; slotMins: number } | null>(null)
   const [toast, setToast]   = useState<string | null>(null)
   const [isPending, startT] = useTransition()
   const toastRef            = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -132,8 +134,8 @@ export function ItineraryGrid({
     toastRef.current = setTimeout(() => setToast(null), 2500)
   }
 
-  function openModal(day: string, slotMins: number) {
-    setModal({ day, slotMins })
+  function openModal(dayOffset: number, slotMins: number) {
+    setModal({ dayOffset, slotMins })
     setTitle("")
     setStartMins(slotMins)
     setEndMins(Math.min(slotMins + 60, END_MIN))
@@ -151,7 +153,7 @@ export function ItineraryGrid({
 
     startT(async () => {
       const result = await addTripActivity(tripId, {
-        date:      modal.day,
+        dayOffset: modal.dayOffset,
         startMins,
         endMins,
         title:     title.trim(),
@@ -168,7 +170,7 @@ export function ItineraryGrid({
           ...prev,
           {
             id:          crypto.randomUUID(),
-            date:        modal.day,
+            dayOffset:   modal.dayOffset,
             startMins,
             endMins,
             title:       title.trim(),
@@ -255,18 +257,30 @@ export function ItineraryGrid({
         <div
           className="grid"
           style={{
-            gridTemplateColumns: `52px repeat(${days.length}, minmax(150px, 1fr))`,
-            minWidth: `${52 + days.length * 150}px`,
+            gridTemplateColumns: `52px repeat(${dayCount}, minmax(150px, 1fr))`,
+            minWidth: `${52 + dayCount * 150}px`,
           }}
         >
           {/* Header row */}
           <div className="sticky left-0 z-10 bg-white border-b border-r border-gray-200 p-2" />
-          {days.map((day) => {
-            const { weekday, date } = formatDay(day)
+          {Array.from({ length: dayCount }, (_, i) => i).map((offset) => {
+            const beyondTrip = scheduledDays > 0 && offset >= scheduledDays
+            const actualDate = scheduledStart ? offsetToActualDate(scheduledStart, offset) : null
             return (
-              <div key={day} className="border-b border-r border-gray-200 p-2 text-center bg-gray-50 last:border-r-0">
-                <p className="text-xs font-semibold text-gray-700">{weekday}</p>
-                <p className="text-xs text-gray-400">{date}</p>
+              <div
+                key={offset}
+                className={`border-b border-r border-gray-200 p-2 text-center last:border-r-0 ${beyondTrip ? "bg-gray-100/60" : "bg-gray-50"}`}
+              >
+                <p className={`text-xs font-semibold ${beyondTrip ? "text-gray-400" : "text-gray-700"}`}>
+                  Day {offset + 1}
+                </p>
+                {actualDate
+                  ? <p className={`text-xs mt-0.5 ${beyondTrip ? "text-gray-300" : "text-gray-400"}`}>{actualDate}</p>
+                  : <p className="text-xs text-gray-300 mt-0.5">unscheduled</p>
+                }
+                {beyondTrip && (
+                  <p className="text-xs text-gray-300 mt-0.5 italic">past end</p>
+                )}
               </div>
             )
           })}
@@ -287,16 +301,17 @@ export function ItineraryGrid({
               </div>
 
               {/* Day cells */}
-              {days.map((day) => {
+              {Array.from({ length: dayCount }, (_, i) => i).map((offset) => {
                 const cellActs = local.filter(
-                  (a) => a.date === day && a.startMins === slotMins
+                  (a) => a.dayOffset === offset && a.startMins === slotMins
                 )
+                const beyondTrip = scheduledDays > 0 && offset >= scheduledDays
                 return (
                   <div
-                    key={`${day}-${slotMins}`}
-                    className="border-r border-b border-gray-100 last:border-r-0 relative group cursor-pointer hover:bg-gray-50/60 transition-colors"
+                    key={`${offset}-${slotMins}`}
+                    className={`border-r border-b border-gray-100 last:border-r-0 relative group cursor-pointer transition-colors ${beyondTrip ? "bg-gray-50/80 hover:bg-gray-100/60" : "hover:bg-gray-50/60"}`}
                     style={{ height: SLOT_HEIGHT }}
-                    onClick={() => openModal(day, slotMins)}
+                    onClick={() => openModal(offset, slotMins)}
                   >
                     {cellActs.map((act) => (
                       <ActivityCard

@@ -38,8 +38,17 @@
 - [x] Bug fix: scheduleTripDates validates start ≤ end
 - [x] UX: preferences card labeled as optional
 
+- [x] Ideas board: anyone can add/remove trip ideas before dates are set
+- [x] Itinerary now uses Day 1/2/3 offsets instead of absolute dates — accessible immediately, no scheduling gate
+- [x] Draft itinerary: days beyond scheduled trip end are greyed but still editable
+- [x] Invite flow fixed: callbackUrl preserved through signup so new users land on trip after creating account
+
 ## Not Yet Built — Booking/During/Post Stages
 These status labels exist but have no dedicated features yet:
+- [ ] **Packing list**: per-trip shared checklist, each person marks their items as packed (optional to fill in)
+- [ ] **Flight info**: each member inputs flight details (airline, number, arrival/departure) → auto-creates itinerary block; shared flight number deduplication shows one block with multiple people
+- [ ] **Hotel info**: check-in/checkout dates + name/address → auto-creates itinerary block
+- [ ] **Email parsing for flights/hotels** (future): forward confirmation email to trip address → auto-fills fields. Needs inbound email webhook (Postmark/SendGrid). Technically feasible, medium overhead.
 - [ ] **Booking stage**: hotel/flight logging, booking confirmation tracking
 - [ ] **During trip**: day-of itinerary view, reminders (bring sunscreen, etc.)
 - [ ] **Post trip**: cost logging, reimbursement splitting, photo sharing (needs storage)
