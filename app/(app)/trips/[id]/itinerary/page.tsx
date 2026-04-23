@@ -1,8 +1,8 @@
-import { getTripWithMembers, getTripActivities } from "@/lib/actions/trips"
+import { getTripWithMembers, getTripActivities, getMemberFlights } from "@/lib/actions/trips"
 import { auth } from "@/lib/auth"
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { ItineraryGrid } from "@/components/trips/itinerary-grid"
+import { ItineraryGrid, type FlightBlock } from "@/components/trips/itinerary-grid"
 
 type Props = { params: Promise<{ id: string }> }
 
@@ -12,12 +12,66 @@ function scheduledDayCount(start: string, end: string): number {
   return Math.round((e.getTime() - s.getTime()) / 86400000) + 1
 }
 
+function isoDateOf(datetime: string) {
+  return datetime.slice(0, 10)
+}
+
+function minsOf(datetime: string) {
+  const parts = datetime.slice(11, 16).split(":")
+  return Number(parts[0]) * 60 + Number(parts[1])
+}
+
+function daysBetween(a: string, b: string) {
+  const da = new Date(a + "T00:00:00")
+  const db = new Date(b + "T00:00:00")
+  return Math.round((db.getTime() - da.getTime()) / 86400000)
+}
+
+function buildFlightBlocks(
+  flights: Awaited<ReturnType<typeof getMemberFlights>>,
+  scheduledStart: string
+): FlightBlock[] {
+  // Group by flightNumber (normalized) + departure date
+  const groups = new Map<string, typeof flights>()
+  for (const f of flights) {
+    const key = `${f.flightNumber.toUpperCase()}|${isoDateOf(f.departureAt)}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(f)
+  }
+
+  const blocks: FlightBlock[] = []
+  for (const [, group] of groups) {
+    const f = group[0]
+    const depDate = isoDateOf(f.departureAt)
+    const arrDate = isoDateOf(f.arrivalAt)
+    const dayOffset = daysBetween(scheduledStart, depDate)
+    const startMins = minsOf(f.departureAt)
+    const overnight = arrDate > depDate
+    const endMins = overnight ? 22 * 60 : minsOf(f.arrivalAt)
+
+    blocks.push({
+      key: `${f.flightNumber}|${f.departureAt}`,
+      flightNumber: f.flightNumber,
+      departureAirport: f.departureAirport,
+      arrivalAirport: f.arrivalAirport,
+      dayOffset,
+      startMins,
+      endMins,
+      overnight,
+      members: group.map((g) => g.displayName),
+    })
+  }
+
+  return blocks
+}
+
 export default async function ItineraryPage({ params }: Props) {
   const { id } = await params
-  const [session, data, activities] = await Promise.all([
+  const [session, data, activities, flights] = await Promise.all([
     auth(),
     getTripWithMembers(id),
     getTripActivities(id),
+    getMemberFlights(id),
   ])
 
   if (!data) notFound()
@@ -34,8 +88,11 @@ export default async function ItineraryPage({ params }: Props) {
   const maxActivityDay =
     activities.length > 0 ? Math.max(...activities.map((a) => a.dayOffset)) : -1
 
-  // Show at least 5 days; expand to fit scheduled trip or existing activities
   const dayCount = Math.max(scheduledDays, maxActivityDay + 1, 5)
+
+  const flightBlocks = trip.scheduledStart
+    ? buildFlightBlocks(flights, trip.scheduledStart)
+    : []
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
@@ -61,6 +118,7 @@ export default async function ItineraryPage({ params }: Props) {
         scheduledDays={scheduledDays}
         scheduledStart={trip.scheduledStart ?? null}
         activities={activities}
+        flightBlocks={flightBlocks}
         myUserId={myUserId}
         isOrganizer={isOrganizer}
         members={members}

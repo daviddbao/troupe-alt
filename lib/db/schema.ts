@@ -127,6 +127,26 @@ export const packingChecks = pgTable("packing_checks", {
     .references(() => profiles.id, { onDelete: "cascade" }),
 })
 
+export const memberFlights = pgTable("member_flights", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  tripId: text("trip_id")
+    .notNull()
+    .references(() => trips.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  direction: text("direction").notNull().default("outbound"), // "outbound" | "return"
+  flightNumber: text("flight_number").notNull(),
+  departureAirport: text("departure_airport"),
+  arrivalAirport: text("arrival_airport"),
+  departureAt: text("departure_at").notNull(), // "YYYY-MM-DDTHH:MM"
+  arrivalAt: text("arrival_at").notNull(),     // "YYYY-MM-DDTHH:MM"
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+})
+
 export const tripInvites = pgTable("trip_invites", {
   id: text("id")
     .primaryKey()

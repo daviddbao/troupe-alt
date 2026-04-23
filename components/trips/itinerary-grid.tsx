@@ -47,6 +47,19 @@ function offsetToActualDate(scheduledStart: string, offset: number): string {
 
 type Attendee = { userId: string; displayName: string }
 
+// Flights pre-processed by the page: deduplicated, offset-relative
+export type FlightBlock = {
+  key: string
+  flightNumber: string
+  departureAirport: string | null
+  arrivalAirport: string | null
+  dayOffset: number
+  startMins: number
+  endMins: number
+  members: string[]       // display names
+  overnight: boolean      // arrives next day
+}
+
 type Activity = {
   id: string
   dayOffset: number
@@ -80,15 +93,17 @@ export function ItineraryGrid({
   scheduledDays,
   scheduledStart,
   activities: initial,
+  flightBlocks = [],
   myUserId,
   isOrganizer,
   members,
 }: {
   tripId: string
   dayCount: number
-  scheduledDays: number       // 0 = not scheduled; otherwise trip length in days
+  scheduledDays: number
   scheduledStart: string | null
   activities: Activity[]
+  flightBlocks?: FlightBlock[]
   myUserId: string
   isOrganizer: boolean
   members: Member[]
@@ -305,6 +320,9 @@ export function ItineraryGrid({
                 const cellActs = local.filter(
                   (a) => a.dayOffset === offset && a.startMins === slotMins
                 )
+                const cellFlights = flightBlocks.filter(
+                  (f) => f.dayOffset === offset && f.startMins === slotMins
+                )
                 const beyondTrip = scheduledDays > 0 && offset >= scheduledDays
                 return (
                   <div
@@ -313,6 +331,9 @@ export function ItineraryGrid({
                     style={{ height: SLOT_HEIGHT }}
                     onClick={() => openModal(offset, slotMins)}
                   >
+                    {cellFlights.map((fb) => (
+                      <FlightCard key={fb.key} block={fb} slotHeight={SLOT_HEIGHT} slotMins={SLOT_MINS} />
+                    ))}
                     {cellActs.map((act) => (
                       <ActivityCard
                         key={act.id}
@@ -327,7 +348,7 @@ export function ItineraryGrid({
                         onUpdateCategory={handleUpdateCategory}
                       />
                     ))}
-                    {cellActs.length === 0 && (
+                    {cellActs.length === 0 && cellFlights.length === 0 && (
                       <span className="text-gray-300 text-xs opacity-0 group-hover:opacity-100 transition-opacity absolute inset-0 flex items-center justify-center select-none pointer-events-none">
                         +
                       </span>
@@ -674,6 +695,43 @@ function ActivityCard({
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+function FlightCard({
+  block,
+  slotHeight,
+  slotMins,
+}: {
+  block: FlightBlock
+  slotHeight: number
+  slotMins: number
+}) {
+  const durationMins = block.overnight
+    ? (22 * 60 - block.startMins)
+    : block.endMins - block.startMins
+  const heightPx = Math.max(slotHeight, (durationMins / slotMins) * slotHeight)
+  const route = [block.departureAirport, block.arrivalAirport].filter(Boolean).join(" → ")
+
+  return (
+    <div
+      className="absolute inset-x-0.5 top-0.5 rounded overflow-hidden z-10 pointer-events-none"
+      style={{ height: heightPx - 4, backgroundColor: "#dbeafe", borderLeft: "3px solid #3b82f6" }}
+    >
+      <div className="px-1.5 py-1 leading-tight">
+        <div className="flex items-center gap-1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 2c-2-2-4-2-5.5-.5L10 5 1.8 6.2c-.5.1-.7.7-.4 1l2.9 2.9L2.9 12c-.3.3-.1.9.4 1l3.8 1.1 1.1 3.8c.1.5.6.7 1 .4l1.8-1.3 2.9 2.9c.3.3.9.1 1-.4z"/>
+          </svg>
+          <span className="text-xs font-semibold text-blue-700 truncate">{block.flightNumber}</span>
+          {route && <span className="text-xs text-blue-500 truncate">{route}</span>}
+        </div>
+        {block.members.length > 0 && (
+          <p className="text-xs text-blue-500 truncate mt-0.5">{block.members.join(", ")}</p>
+        )}
+        {block.overnight && <p className="text-xs text-blue-400 mt-0.5">overnight ›</p>}
+      </div>
     </div>
   )
 }

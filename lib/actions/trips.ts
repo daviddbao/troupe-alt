@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { trips, tripMembers, tripInvites, profiles, availabilityBlocks, tripActivities, activityAttendees, tripIdeas, packingItems, packingChecks } from "@/lib/db/schema"
+import { trips, tripMembers, tripInvites, profiles, availabilityBlocks, tripActivities, activityAttendees, tripIdeas, packingItems, packingChecks, memberFlights } from "@/lib/db/schema"
 import { eq, and, inArray, desc } from "drizzle-orm"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
@@ -863,4 +863,97 @@ export async function togglePackingCheck(tripId: string, itemId: string) {
   }
 
   revalidatePath(`/trips/${tripId}`)
+}
+
+export async function getMemberFlights(tripId: string) {
+  const session = await auth()
+  if (!session?.user?.id) return []
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return []
+
+  return db
+    .select({
+      id: memberFlights.id,
+      userId: memberFlights.userId,
+      displayName: profiles.displayName,
+      direction: memberFlights.direction,
+      flightNumber: memberFlights.flightNumber,
+      departureAirport: memberFlights.departureAirport,
+      arrivalAirport: memberFlights.arrivalAirport,
+      departureAt: memberFlights.departureAt,
+      arrivalAt: memberFlights.arrivalAt,
+      notes: memberFlights.notes,
+    })
+    .from(memberFlights)
+    .innerJoin(profiles, eq(memberFlights.userId, profiles.id))
+    .where(eq(memberFlights.tripId, tripId))
+    .orderBy(memberFlights.departureAt)
+}
+
+export async function addMemberFlight(
+  tripId: string,
+  data: {
+    direction: "outbound" | "return"
+    flightNumber: string
+    departureAirport?: string
+    arrivalAirport?: string
+    departureAt: string
+    arrivalAt: string
+    notes?: string
+  }
+) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return { error: "Not a member of this trip." }
+
+  if (!data.flightNumber.trim()) return { error: "Flight number is required." }
+  if (!data.departureAt || !data.arrivalAt) return { error: "Departure and arrival times are required." }
+  if (data.departureAt >= data.arrivalAt) return { error: "Arrival must be after departure." }
+
+  await db.insert(memberFlights).values({
+    tripId,
+    userId: session.user.id,
+    direction: data.direction,
+    flightNumber: data.flightNumber.trim().toUpperCase(),
+    departureAirport: data.departureAirport?.trim().toUpperCase() || null,
+    arrivalAirport: data.arrivalAirport?.trim().toUpperCase() || null,
+    departureAt: data.departureAt,
+    arrivalAt: data.arrivalAt,
+    notes: data.notes?.trim() || null,
+  })
+
+  revalidatePath(`/trips/${tripId}`)
+  revalidatePath(`/trips/${tripId}/itinerary`)
+}
+
+export async function deleteMemberFlight(tripId: string, flightId: string) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const [flight] = await db
+    .select()
+    .from(memberFlights)
+    .where(and(eq(memberFlights.id, flightId), eq(memberFlights.tripId, tripId)))
+  if (!flight) return { error: "Flight not found." }
+
+  if (flight.userId !== session.user.id) {
+    const [membership] = await db
+      .select()
+      .from(tripMembers)
+      .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+    if (membership?.role !== "organizer") return { error: "You can only delete your own flights." }
+  }
+
+  await db.delete(memberFlights).where(eq(memberFlights.id, flightId))
+  revalidatePath(`/trips/${tripId}`)
+  revalidatePath(`/trips/${tripId}/itinerary`)
 }

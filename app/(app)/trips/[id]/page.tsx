@@ -1,4 +1,4 @@
-import { getTripWithMembers, getExistingInvite, getUserAvailability, getTripAggregateAvailability, getTripIdeas, getPackingList } from "@/lib/actions/trips"
+import { getTripWithMembers, getExistingInvite, getUserAvailability, getTripAggregateAvailability, getTripIdeas, getPackingList, getMemberFlights } from "@/lib/actions/trips"
 import { auth } from "@/lib/auth"
 import { headers } from "next/headers"
 import { notFound } from "next/navigation"
@@ -10,6 +10,7 @@ import { TripActions } from "@/components/trips/trip-actions"
 import { TripStatus } from "@/components/trips/trip-status"
 import { IdeasBoard } from "@/components/trips/ideas-board"
 import { PackingList } from "@/components/trips/packing-list"
+import { FlightsSection } from "@/components/trips/flights-section"
 import type { TripStatus as TripStatusType } from "@/lib/db/schema"
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ joined?: string }> }
@@ -41,7 +42,7 @@ function formatScheduledDates(start: string, end: string) {
 
 export default async function TripPage({ params, searchParams }: Props) {
   const [{ id }, { joined }] = await Promise.all([params, searchParams])
-  const [session, data, myDates, existingInviteCode, aggregate, ideas, packingList] = await Promise.all([
+  const [session, data, myDates, existingInviteCode, aggregate, ideas, packingList, flights] = await Promise.all([
     auth(),
     getTripWithMembers(id),
     getUserAvailability(id),
@@ -49,6 +50,7 @@ export default async function TripPage({ params, searchParams }: Props) {
     getTripAggregateAvailability(id),
     getTripIdeas(id),
     getPackingList(id),
+    getMemberFlights(id),
   ])
 
   if (!data) notFound()
@@ -308,6 +310,14 @@ export default async function TripPage({ params, searchParams }: Props) {
         myUserId={session?.user?.id ?? ""}
         isOrganizer={isOrganizer}
         members={members.map((m) => ({ userId: m.userId, displayName: m.displayName }))}
+      />
+
+      {/* Flights */}
+      <FlightsSection
+        tripId={id}
+        initialFlights={flights}
+        myUserId={session?.user?.id ?? ""}
+        isOrganizer={isOrganizer}
       />
 
       {/* Ideas board */}
