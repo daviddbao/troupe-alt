@@ -15,12 +15,13 @@ function EyeIcon({ open }: { open: boolean }) {
   )
 }
 
-export function SignupForm() {
+export function SignupForm({ callbackUrl }: { callbackUrl: string }) {
   const [state, action, pending] = useActionState(signup, undefined)
   const [showPassword, setShowPassword] = useState(false)
 
   return (
     <form action={action} className="space-y-4">
+      <input type="hidden" name="callbackUrl" value={callbackUrl} />
       <div>
         <label htmlFor="email" className="block text-sm font-medium mb-1.5">
           Email

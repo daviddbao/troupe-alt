@@ -14,6 +14,7 @@ export async function signup(
 ) {
   const email = formData.get("email") as string
   const password = formData.get("password") as string
+  const callbackUrl = (formData.get("callbackUrl") as string) || "/dashboard"
 
   if (!email || !password) {
     return { error: "All fields are required." }
@@ -47,7 +48,7 @@ export async function signup(
     passwordHash,
   })
 
-  await signIn("credentials", { email: email.toLowerCase(), password, redirectTo: "/dashboard" })
+  await signIn("credentials", { email: email.toLowerCase(), password, redirectTo: callbackUrl })
 }
 
 export async function login(
