@@ -21,7 +21,7 @@ function lastWeekday(year: number, month: number, weekday: number): Date {
 function holidayWeekend(holiday: Date, today: Date): string[] {
   if (holiday < today) return []
   const dates: string[] = []
-  for (let offset = -2; offset <= 1; offset++) {
+  for (let offset = -3; offset <= 3; offset++) {
     const d = new Date(holiday)
     d.setDate(d.getDate() + offset)
     if (d >= today) dates.push(toIso(d))
