@@ -349,6 +349,7 @@ export async function scheduleTripDates(tripId: string, startDate: string, endDa
     .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
 
   if (membership?.role !== "organizer") return { error: "Only the organizer can schedule the trip." }
+  if (startDate > endDate) return { error: "Start date must be before end date." }
 
   await db
     .update(trips)
@@ -444,6 +445,23 @@ export async function leaveTrip(tripId: string) {
       .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.role, "organizer")))
     const hasOtherOrganizer = otherOrganizers.some((m) => m.userId !== session.user!.id)
     if (!hasOtherOrganizer) return { error: "promote_first" }
+  }
+
+  // Clean up activity attendances before leaving
+  const tripActivityIds = await db
+    .select({ id: tripActivities.id })
+    .from(tripActivities)
+    .where(eq(tripActivities.tripId, tripId))
+
+  if (tripActivityIds.length > 0) {
+    await db
+      .delete(activityAttendees)
+      .where(
+        and(
+          eq(activityAttendees.userId, session.user.id),
+          inArray(activityAttendees.activityId, tripActivityIds.map((a) => a.id))
+        )
+      )
   }
 
   await db

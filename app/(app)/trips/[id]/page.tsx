@@ -259,7 +259,10 @@ export default async function TripPage({ params, searchParams }: Props) {
       {/* Preferences card */}
       <div className="border border-gray-200 rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-gray-700">Preferences</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-gray-700">Preferences</h2>
+            <span className="text-xs text-gray-400">(optional)</span>
+          </div>
           {!isOrganizer && trip.preferences && (
             <span className="text-xs text-gray-400">set by organizer</span>
           )}
@@ -276,7 +279,7 @@ export default async function TripPage({ params, searchParams }: Props) {
         ) : isOrganizer ? (
           <Link
             href={`/trips/${id}/preferences`}
-            className="block text-center py-2 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            className="block text-center py-2 text-sm font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           >
             Set trip preferences →
           </Link>
