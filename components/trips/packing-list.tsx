@@ -56,10 +56,14 @@ export function PackingList({
   }
 
   function handleDelete(itemId: string) {
+    const removed = items.find((i) => i.id === itemId)
     setItems((prev) => prev.filter((i) => i.id !== itemId))
     startT(async () => {
       const result = await deletePackingItem(tripId, itemId)
-      if (result?.error) setError(result.error)
+      if (result?.error) {
+        setError(result.error)
+        if (removed) setItems((prev) => [...prev, removed])
+      }
     })
   }
 

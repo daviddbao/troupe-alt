@@ -93,10 +93,14 @@ export function HotelsSection({
   }
 
   function handleDelete(hotelId: string) {
+    const removed = hotels.find((h) => h.id === hotelId)
     setHotels((prev) => prev.filter((h) => h.id !== hotelId))
     startT(async () => {
       const result = await deleteHotelStay(tripId, hotelId)
-      if (result?.error) setError(result.error)
+      if (result?.error) {
+        setError(result.error)
+        if (removed) setHotels((prev) => [...prev, removed].sort((a, b) => a.checkIn.localeCompare(b.checkIn)))
+      }
     })
   }
 

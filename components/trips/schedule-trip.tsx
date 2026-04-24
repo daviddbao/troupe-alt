@@ -28,11 +28,17 @@ export function ScheduleTrip({
 }) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
 
   function handlePickWindow(w: Window) {
+    setError(null)
     startTransition(async () => {
-      await scheduleTripDates(tripId, w.dates[0], w.dates[w.dates.length - 1])
-      setOpen(false)
+      const result = await scheduleTripDates(tripId, w.dates[0], w.dates[w.dates.length - 1])
+      if (result?.error) {
+        setError(result.error)
+      } else {
+        setOpen(false)
+      }
     })
   }
 
@@ -116,6 +122,7 @@ export function ScheduleTrip({
               <p className="text-sm text-gray-400 mb-4">No availability data yet — add dates first.</p>
             )}
 
+            {error && <p className="text-xs text-red-600 mb-2">{error}</p>}
             <button
               onClick={() => setOpen(false)}
               className="w-full py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"

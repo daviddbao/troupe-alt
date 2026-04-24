@@ -101,10 +101,14 @@ export function FlightsSection({
   }
 
   function handleDelete(flightId: string) {
+    const removed = flights.find((f) => f.id === flightId)
     setFlights((prev) => prev.filter((f) => f.id !== flightId))
     startT(async () => {
       const result = await deleteMemberFlight(tripId, flightId)
-      if (result?.error) setError(result.error)
+      if (result?.error) {
+        setError(result.error)
+        if (removed) setFlights((prev) => [...prev, removed].sort((a, b) => a.departureAt.localeCompare(b.departureAt)))
+      }
     })
   }
 

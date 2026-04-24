@@ -482,6 +482,12 @@ export async function promoteMember(tripId: string, userId: string) {
 
   if (membership?.role !== "organizer") return { error: "Only an organizer can promote members." }
 
+  const [target] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, userId)))
+  if (!target) return { error: "User is not a member of this trip." }
+
   await db
     .update(tripMembers)
     .set({ role: "organizer" })

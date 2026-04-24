@@ -79,12 +79,14 @@ function buildHotelBlocks(
   const blocks: HotelBlock[] = []
   for (const [, group] of groups) {
     const h = group[0]
+    // Use the latest checkout across all members sharing this hotel
+    const latestCheckOut = group.reduce((latest, g) => g.checkOut > latest ? g.checkOut : latest, h.checkOut)
     blocks.push({
       key: `${h.name}|${h.checkIn}`,
       name: h.name,
       address: h.address,
       startOffset: daysBetween(scheduledStart, h.checkIn),
-      endOffset: daysBetween(scheduledStart, h.checkOut),
+      endOffset: daysBetween(scheduledStart, latestCheckOut),
       members: group.map((g) => g.displayName),
     })
   }
