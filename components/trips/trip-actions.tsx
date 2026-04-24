@@ -94,14 +94,6 @@ export function TripActions({
                   )}
                   {isOrganizer && (
                     <button
-                      onClick={() => setMode("confirmLeave")}
-                      className="w-full text-left py-2.5 px-3 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors"
-                    >
-                      Leave trip
-                    </button>
-                  )}
-                  {isOrganizer && (
-                    <button
                       onClick={() => setMode("confirmDelete")}
                       className="w-full text-left py-2.5 px-3 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors"
                     >

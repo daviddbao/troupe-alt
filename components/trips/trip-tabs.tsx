@@ -19,10 +19,10 @@ export function TripTabs({
 }) {
   const [active, setActive] = useState<Tab>("plan")
 
-  const tabs: { id: Tab; label: string; count?: number }[] = [
+  const tabs: { id: Tab; label: string; dot?: boolean }[] = [
     { id: "plan", label: "Plan" },
-    { id: "logistics", label: "Logistics", count: logisticsCount || undefined },
-    { id: "ideas", label: "Ideas", count: ideasCount || undefined },
+    { id: "logistics", label: "Logistics", dot: logisticsCount > 0 },
+    { id: "ideas", label: "Ideas", dot: ideasCount > 0 },
   ]
 
   return (
@@ -40,12 +40,8 @@ export function TripTabs({
             }`}
           >
             {tab.label}
-            {tab.count !== undefined && (
-              <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
-                active === tab.id ? "bg-gray-100 text-gray-600" : "bg-gray-200 text-gray-500"
-              }`}>
-                {tab.count}
-              </span>
+            {tab.dot && (
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${active === tab.id ? "bg-gray-400" : "bg-gray-400"}`} />
             )}
           </button>
         ))}

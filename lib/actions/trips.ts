@@ -447,26 +447,32 @@ export async function leaveTrip(tripId: string) {
     if (!hasOtherOrganizer) return { error: "promote_first" }
   }
 
-  // Clean up activity attendances before leaving
-  const tripActivityIds = await db
-    .select({ id: tripActivities.id })
-    .from(tripActivities)
-    .where(eq(tripActivities.tripId, tripId))
-
-  if (tripActivityIds.length > 0) {
-    await db
-      .delete(activityAttendees)
-      .where(
-        and(
-          eq(activityAttendees.userId, session.user.id),
-          inArray(activityAttendees.activityId, tripActivityIds.map((a) => a.id))
-        )
-      )
-  }
+  // Clean up all user data for this trip before removing membership
+  const userId = session.user.id
+  await Promise.all([
+    // Activity attendances
+    db.select({ id: tripActivities.id }).from(tripActivities).where(eq(tripActivities.tripId, tripId))
+      .then((ids) => ids.length > 0
+        ? db.delete(activityAttendees).where(and(eq(activityAttendees.userId, userId), inArray(activityAttendees.activityId, ids.map((a) => a.id))))
+        : null
+      ),
+    // Availability
+    db.delete(availabilityBlocks).where(and(eq(availabilityBlocks.tripId, tripId), eq(availabilityBlocks.userId, userId))),
+    // Flights
+    db.delete(memberFlights).where(and(eq(memberFlights.tripId, tripId), eq(memberFlights.userId, userId))),
+    // Hotels
+    db.delete(hotelStays).where(and(eq(hotelStays.tripId, tripId), eq(hotelStays.userId, userId))),
+    // Packing checks (the items themselves stay, just uncheck)
+    db.select({ id: packingItems.id }).from(packingItems).where(eq(packingItems.tripId, tripId))
+      .then((ids) => ids.length > 0
+        ? db.delete(packingChecks).where(and(eq(packingChecks.userId, userId), inArray(packingChecks.itemId, ids.map((i) => i.id))))
+        : null
+      ),
+  ])
 
   await db
     .delete(tripMembers)
-    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, userId)))
 
   redirect("/dashboard")
 }
@@ -608,6 +614,7 @@ export async function addTripActivity(
   }
 
   revalidatePath(`/trips/${tripId}/itinerary`)
+  return { id: inserted?.id }
 }
 
 export async function deleteTripActivity(tripId: string, activityId: string) {

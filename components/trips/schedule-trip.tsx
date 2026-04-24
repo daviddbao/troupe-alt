@@ -27,6 +27,7 @@ export function ScheduleTrip({
   minNights?: number
 }) {
   const [open, setOpen] = useState(false)
+  const [confirmClear, setConfirmClear] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
@@ -58,13 +59,21 @@ export function ScheduleTrip({
           <p className="text-sm font-medium text-gray-900">{label}</p>
           <p className="text-xs text-gray-400 mt-0.5">Trip scheduled</p>
         </div>
-        <button
-          onClick={handleClear}
-          disabled={isPending}
-          className="text-xs text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-50"
-        >
-          Change
-        </button>
+        {confirmClear ? (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">Clear dates?</span>
+            <button onClick={() => { setConfirmClear(false); handleClear() }} disabled={isPending} className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50">Yes</button>
+            <button onClick={() => setConfirmClear(false)} className="text-xs text-gray-400 hover:text-gray-600">No</button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmClear(true)}
+            disabled={isPending}
+            className="text-xs text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-50"
+          >
+            Change
+          </button>
+        )}
       </div>
     )
   }

@@ -207,7 +207,7 @@ export function ItineraryGrid({
         setLocal((prev) => [
           ...prev,
           {
-            id:          crypto.randomUUID(),
+            id:          result?.id ?? crypto.randomUUID(),
             dayOffset:   modal.dayOffset,
             startMins,
             endMins,
