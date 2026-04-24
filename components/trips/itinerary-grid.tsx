@@ -122,6 +122,17 @@ export function ItineraryGrid({
 }) {
   const myDisplayName = members.find((m) => m.userId === myUserId)?.displayName ?? ""
 
+  // Compute default day for day view: today's offset if within trip, else 0
+  const defaultDay = (() => {
+    if (!scheduledStart) return 0
+    const today = new Date().toISOString().slice(0, 10)
+    const ms = new Date(today + "T00:00:00").getTime() - new Date(scheduledStart + "T00:00:00").getTime()
+    const offset = Math.round(ms / 86400000)
+    return Math.max(0, Math.min(offset, dayCount - 1))
+  })()
+
+  const [viewMode, setViewMode]   = useState<"grid" | "day">("grid")
+  const [currentDay, setCurrentDay] = useState(defaultDay)
   const [local, setLocal]   = useState<Activity[]>(initial)
   const [modal, setModal]   = useState<{ dayOffset: number; slotMins: number } | null>(null)
   const [toast, setToast]   = useState<string | null>(null)
@@ -268,18 +279,145 @@ export function ItineraryGrid({
         </div>
       )}
 
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4">
-        {DEFAULT_CATEGORIES.map((cat) => (
-          <span key={cat.name} className="flex items-center gap-1.5 text-xs text-gray-500">
-            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-            {cat.name}
-          </span>
-        ))}
-        <span className="ml-auto text-xs text-gray-400 hidden sm:block">Tap a slot to add</span>
+      {/* Toolbar: view toggle + legend */}
+      <div className="flex items-center gap-3 mb-4">
+        {/* Grid / Day toggle */}
+        <div className="flex gap-0.5 p-0.5 bg-gray-100 rounded-lg">
+          {(["grid", "day"] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                viewMode === mode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {mode === "grid" ? "Full trip" : "Day view"}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 flex-1">
+          {DEFAULT_CATEGORIES.map((cat) => (
+            <span key={cat.name} className="flex items-center gap-1 text-xs text-gray-400">
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+              {cat.name}
+            </span>
+          ))}
+        </div>
       </div>
 
+      {/* Day view */}
+      {viewMode === "day" && (
+        <div className="space-y-4">
+          {/* Day nav */}
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setCurrentDay((d) => Math.max(0, d - 1))}
+              disabled={currentDay === 0}
+              className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-colors"
+              aria-label="Previous day"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 18l-6-6 6-6"/>
+              </svg>
+            </button>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-gray-800">Day {currentDay + 1}</p>
+              {scheduledStart && (
+                <p className="text-xs text-gray-400 mt-0.5">{offsetToActualDate(scheduledStart, currentDay)}</p>
+              )}
+            </div>
+            <button
+              onClick={() => setCurrentDay((d) => Math.min(dayCount - 1, d + 1))}
+              disabled={currentDay === dayCount - 1}
+              className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-colors"
+              aria-label="Next day"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </button>
+          </div>
+
+          {/* Hotels today */}
+          {hotelBlocks.filter((h) => h.startOffset <= currentDay && currentDay < h.endOffset).map((h) => (
+            <div key={h.key} className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600 flex-shrink-0">
+                <rect x="2" y="7" width="20" height="15" rx="2"/><path d="M16 7V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v3"/><line x1="12" y1="12" x2="12" y2="12.01"/>
+              </svg>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-amber-900">{h.name}</p>
+                {h.address && <p className="text-xs text-amber-700 mt-0.5 truncate">{h.address}</p>}
+              </div>
+              {h.members.length > 1 && (
+                <span className="text-xs text-amber-600">{h.members.length} people</span>
+              )}
+            </div>
+          ))}
+
+          {/* Flights today */}
+          {flightBlocks.filter((f) => f.dayOffset === currentDay).map((fb) => (
+            <div key={fb.key} className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 flex-shrink-0">
+                <path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 2c-2-2-4-2-5.5-.5L10 5 1.8 6.2c-.5.1-.7.7-.4 1l2.9 2.9L2.9 12c-.3.3-.1.9.4 1l3.8 1.1 1.1 3.8c.1.5.6.7 1 .4l1.8-1.3 2.9 2.9c.3.3.9.1 1-.4z"/>
+              </svg>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-blue-900">
+                  {fb.flightNumber}
+                  {fb.departureAirport && fb.arrivalAirport && (
+                    <span className="font-normal text-blue-700 ml-1.5">{fb.departureAirport} → {fb.arrivalAirport}</span>
+                  )}
+                </p>
+                <p className="text-xs text-blue-700 mt-0.5">{formatMins(fb.startMins)}{fb.overnight ? " (overnight)" : ` → ${formatMins(fb.endMins)}`}</p>
+              </div>
+              {fb.members.length > 0 && (
+                <span className="text-xs text-blue-600">{fb.members.join(", ")}</span>
+              )}
+            </div>
+          ))}
+
+          {/* Activities for this day */}
+          {(() => {
+            const dayActs = local
+              .filter((a) => a.dayOffset === currentDay)
+              .sort((a, b) => a.startMins - b.startMins)
+
+            return dayActs.length === 0 ? (
+              <div
+                className="flex flex-col items-center justify-center gap-2 py-10 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-gray-300 transition-colors"
+                onClick={() => openModal(currentDay, 540)}
+              >
+                <p className="text-sm text-gray-400">No activities yet</p>
+                <p className="text-xs text-gray-300">Tap to add one</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {dayActs.map((act) => (
+                  <DayActivityCard
+                    key={act.id}
+                    act={act}
+                    myUserId={myUserId}
+                    isOrganizer={isOrganizer}
+                    isPending={isPending}
+                    onDelete={handleDelete}
+                    onToggleJoin={handleToggleJoin}
+                  />
+                ))}
+              </div>
+            )
+          })()}
+
+          {/* Add button */}
+          <button
+            onClick={() => openModal(currentDay, 540)}
+            className="w-full py-2.5 border border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors"
+          >
+            + Add activity
+          </button>
+        </div>
+      )}
+
       {/* Scrollable grid */}
+      {viewMode === "grid" && (
       <div className="overflow-x-auto rounded-xl border border-gray-200">
         <div
           className="grid"
@@ -397,6 +535,7 @@ export function ItineraryGrid({
           ))}
         </div>
       </div>
+      )}
 
       {/* Add activity modal */}
       {modal && (
@@ -768,6 +907,84 @@ function FlightCard({
           <p className="text-xs text-blue-500 truncate mt-0.5">{block.members.join(", ")}</p>
         )}
         {block.overnight && <p className="text-xs text-blue-400 mt-0.5">overnight ›</p>}
+      </div>
+    </div>
+  )
+}
+
+// ── Day view activity card ────────────────────────────────────────────────────
+
+function DayActivityCard({
+  act,
+  myUserId,
+  isOrganizer,
+  isPending,
+  onDelete,
+  onToggleJoin,
+}: {
+  act: Activity
+  myUserId: string
+  isOrganizer: boolean
+  isPending: boolean
+  onDelete: (id: string) => void
+  onToggleJoin: (id: string) => void
+}) {
+  const color     = cardColor(act)
+  const canDelete = act.createdBy === myUserId || isOrganizer
+  const open_     = isOpen(act)
+  const private_  = isPrivate(act)
+
+  return (
+    <div
+      className={`flex items-start gap-3 p-3 rounded-xl border border-gray-100 bg-white shadow-sm ${private_ ? "opacity-70" : ""}`}
+      style={{ borderLeftColor: color, borderLeftWidth: 3 }}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {private_ && <span className="text-xs opacity-60">🔒</span>}
+          <span className="text-sm font-semibold text-gray-800">{act.title}</span>
+          {act.category && (
+            <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${color}25`, color }}>
+              {act.category}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-gray-500 mt-0.5 tabular-nums">{minsRange(act.startMins, act.endMins)}</p>
+        {act.location && (
+          <p className="text-xs text-gray-400 mt-0.5 truncate">📍 {act.location}</p>
+        )}
+        {open_ && (
+          <p className="text-xs text-gray-400 mt-1">
+            {act.attendees.length > 0 ? act.attendees.map((a) => a.displayName).join(", ") : "No one yet"}
+          </p>
+        )}
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {open_ && (
+          <button
+            onClick={() => onToggleJoin(act.id)}
+            disabled={isPending}
+            className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors disabled:opacity-50 ${
+              act.iAmAttending
+                ? "bg-green-100 text-green-700"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            {act.iAmAttending ? "✓ In" : "+ Join"}
+          </button>
+        )}
+        {canDelete && (
+          <button
+            onClick={() => onDelete(act.id)}
+            disabled={isPending}
+            className="text-gray-300 hover:text-red-500 transition-colors"
+            aria-label="Delete"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   )
