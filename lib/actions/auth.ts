@@ -48,7 +48,12 @@ export async function signup(
     passwordHash,
   })
 
-  await signIn("credentials", { email: email.toLowerCase(), password, redirectTo: callbackUrl })
+  try {
+    await signIn("credentials", { email: email.toLowerCase(), password, redirectTo: callbackUrl })
+  } catch (e) {
+    if (e instanceof AuthError) return { error: "Account created but sign-in failed. Please log in." }
+    throw e
+  }
 }
 
 export async function login(
@@ -83,19 +88,3 @@ export async function logout() {
   await signOut({ redirectTo: "/login" })
 }
 
-export async function updateDisplayName(
-  _prevState: { error?: string; success?: boolean } | undefined,
-  formData: FormData
-) {
-  const { auth } = await import("@/lib/auth")
-  const session = await auth()
-  if (!session?.user?.id) redirect("/login")
-
-  const displayName = (formData.get("displayName") as string)?.trim()
-  if (!displayName) return { error: "Display name is required." }
-
-  const { profiles: profilesTable } = await import("@/lib/db/schema")
-  await db.update(profilesTable).set({ displayName }).where(eq(profilesTable.id, session.user.id))
-
-  return { success: true }
-}

@@ -51,6 +51,8 @@ export function PackingList({
       if (result?.error) {
         setItems((prev) => prev.filter((i) => i.id !== optimistic.id))
         setError(result.error)
+      } else if (result?.id) {
+        setItems((prev) => prev.map((i) => i.id === optimistic.id ? { ...i, id: result.id! } : i))
       }
     })
   }

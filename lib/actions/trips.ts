@@ -826,8 +826,9 @@ export async function addPackingItem(tripId: string, label: string) {
   const trimmed = label.trim()
   if (!trimmed) return { error: "Item cannot be empty." }
 
-  await db.insert(packingItems).values({ tripId, createdBy: session.user.id, label: trimmed })
+  const [inserted] = await db.insert(packingItems).values({ tripId, createdBy: session.user.id, label: trimmed }).returning()
   revalidatePath(`/trips/${tripId}`)
+  return { id: inserted?.id }
 }
 
 export async function deletePackingItem(tripId: string, itemId: string) {
