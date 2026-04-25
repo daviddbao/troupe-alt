@@ -1200,6 +1200,7 @@ export async function getMemberPreferences(tripId: string) {
       userId: memberPreferences.userId,
       displayName: profiles.displayName,
       budget: memberPreferences.budget,
+      vibes: memberPreferences.vibes,
       notes: memberPreferences.notes,
     })
     .from(memberPreferences)
@@ -1207,7 +1208,7 @@ export async function getMemberPreferences(tripId: string) {
     .where(eq(memberPreferences.tripId, tripId))
 }
 
-export async function saveMemberPreferences(tripId: string, budget: string | null, notes: string | null) {
+export async function saveMemberPreferences(tripId: string, budget: string | null, vibes: string | null, notes: string | null) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
@@ -1219,10 +1220,10 @@ export async function saveMemberPreferences(tripId: string, budget: string | nul
 
   await db
     .insert(memberPreferences)
-    .values({ tripId, userId: session.user.id, budget: budget as never, notes })
+    .values({ tripId, userId: session.user.id, budget: budget as never, vibes, notes })
     .onConflictDoUpdate({
       target: [memberPreferences.tripId, memberPreferences.userId],
-      set: { budget: sql`excluded.budget`, notes: sql`excluded.notes` },
+      set: { budget: sql`excluded.budget`, vibes: sql`excluded.vibes`, notes: sql`excluded.notes` },
     })
 
   revalidatePath(`/trips/${tripId}`)

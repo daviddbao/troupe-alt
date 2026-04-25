@@ -148,22 +148,42 @@ export default async function TripPage({ params, searchParams }: Props) {
         ideasCount={ideasCount}
         planContent={
           <div className="space-y-4">
-            {/* Group availability */}
-            <div className="border border-gray-200 rounded-xl p-4 space-y-4">
+            {/* Availability calendar — first thing you see */}
+            <div className="border border-gray-200 rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-gray-700">Group availability</h2>
-                <span className="text-xs text-gray-400">{submittedCount}/{members.length} submitted</span>
+                <h2 className="text-sm font-semibold text-gray-700">My availability</h2>
+                {submittedCount > 0 && (
+                  <span className="text-xs text-gray-400">{submittedCount}/{members.length} submitted</span>
+                )}
               </div>
+              <AvailabilityCalendarClient
+                tripId={id}
+                savedDates={myDates}
+                inline
+                dateCounts={aggregate?.dateCounts ?? {}}
+                memberCount={aggregate?.memberCount ?? members.length}
+              />
+            </div>
 
-              {bestWindows.length > 0 ? (
+            {/* Best windows — only shown when there's data */}
+            {bestWindows.length > 0 && (
+              <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-gray-700">Best windows</h2>
+                  {isOrganizer && (
+                    <ScheduleTrip
+                      tripId={id}
+                      bestWindows={bestWindows}
+                      currentStart={trip.scheduledStart ?? null}
+                      currentEnd={trip.scheduledEnd ?? null}
+                      minNights={minNights}
+                    />
+                  )}
+                </div>
                 <ul className="space-y-1.5">
                   {bestWindows.map((w, i) => {
                     const pct = Math.round(w.coverage * 100)
-                    const dotColor =
-                      pct >= 100 ? "bg-green-600" :
-                      pct >= 75 ? "bg-green-300" :
-                      pct >= 50 ? "bg-yellow-300" :
-                      "bg-orange-300"
+                    const dotColor = pct >= 100 ? "bg-green-600" : pct >= 75 ? "bg-green-300" : pct >= 50 ? "bg-yellow-300" : "bg-orange-300"
                     const allDates = w.dates
                     const label = (() => {
                       const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" }
@@ -179,31 +199,24 @@ export default async function TripPage({ params, searchParams }: Props) {
                           <span className="text-sm font-medium">{label}</span>
                           <span className="text-xs text-gray-400">{allDates.length}d</span>
                         </div>
-                        <span className="text-sm font-semibold text-gray-700">
-                          {Math.round(w.avg)}/{aggregate!.memberCount}
-                        </span>
+                        <span className="text-sm font-semibold text-gray-700">{Math.round(w.avg)}/{aggregate!.memberCount}</span>
                       </li>
                     )
                   })}
                 </ul>
-              ) : (
-                <p className="text-sm text-gray-400">
-                  {members.length <= 1
-                    ? "Invite friends to start coordinating — the more people add availability, the better!"
-                    : "No availability submitted yet — be the first!"}
-                </p>
-              )}
+              </div>
+            )}
 
-              {isOrganizer && (
-                <ScheduleTrip
-                  tripId={id}
-                  bestWindows={bestWindows}
-                  currentStart={trip.scheduledStart ?? null}
-                  currentEnd={trip.scheduledEnd ?? null}
-                  minNights={minNights}
-                />
-              )}
-            </div>
+            {/* Schedule button for organizer when no windows yet */}
+            {isOrganizer && bestWindows.length === 0 && (
+              <ScheduleTrip
+                tripId={id}
+                bestWindows={[]}
+                currentStart={trip.scheduledStart ?? null}
+                currentEnd={trip.scheduledEnd ?? null}
+                minNights={minNights}
+              />
+            )}
 
             {/* Preferences */}
             <MemberPreferencesSection
@@ -213,15 +226,6 @@ export default async function TripPage({ params, searchParams }: Props) {
               initialMemberPrefs={memberPrefs}
               myUserId={myUserId}
               members={members.map((m) => ({ userId: m.userId, displayName: m.displayName }))}
-            />
-
-            {/* Combined availability calendar — personal + aggregate overlay */}
-            <AvailabilityCalendarClient
-              tripId={id}
-              savedDates={myDates}
-              inline
-              dateCounts={aggregate?.dateCounts ?? {}}
-              memberCount={aggregate?.memberCount ?? members.length}
             />
 
             {/* People */}

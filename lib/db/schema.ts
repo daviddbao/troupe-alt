@@ -214,5 +214,6 @@ export const memberPreferences = pgTable("member_preferences", {
     .notNull()
     .references(() => profiles.id, { onDelete: "cascade" }),
   budget: text("budget").$type<MemberPrefs["budget"]>(),
+  vibes: text("vibes"), // comma-separated: "beach,city,mountains" etc
   notes: text("notes"),
 })

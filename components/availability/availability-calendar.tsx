@@ -55,7 +55,6 @@ function buildHolidays(): { label: string; dates: string[] }[] {
 }
 
 const HOLIDAYS = buildHolidays()
-const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
 function toIso(d: Date): string {
   return d.toISOString().slice(0, 10)
@@ -303,24 +302,6 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved, dateCounts, 
     }, 1200)
   }
 
-  // Group selected dates by month for summary panel
-  const datesByMonth = useMemo(() => {
-    const sorted = [...selected].sort()
-    const groups: { key: string; label: string; dates: string[] }[] = []
-    for (const d of sorted) {
-      const [y, m] = d.split("-").map(Number)
-      const key = `${y}-${String(m).padStart(2, "0")}`
-      const last = groups[groups.length - 1]
-      if (last && last.key === key) {
-        last.dates.push(d)
-      } else {
-        const label = new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" })
-        groups.push({ key, label, dates: [d] })
-      }
-    }
-    return groups
-  }, [selected])
-
   const visibleHolidays = HOLIDAYS.filter((h) => h.dates.length > 0)
   const selectedDates = selected.map(fromIso)
   const anchorDates = rangeAnchor ? [fromIso(rangeAnchor)] : []
@@ -340,198 +321,122 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved, dateCounts, 
   }
 
   return (
-    <div className="space-y-4">
-      {/* Quick-add chips: holidays + weekdays */}
-      <div className="space-y-2">
-        {visibleHolidays.length > 0 && (
-          <div className="overflow-x-auto -mx-4 px-4">
-            <div className="flex gap-2 pb-1" style={{ minWidth: "max-content" }}>
-              {visibleHolidays.map((h) => {
-                const valid = h.dates.filter((d) => fromIso(d) >= today)
-                const allSel = valid.length > 0 && valid.every((d) => selected.includes(d))
-                return (
-                  <button
-                    key={h.label}
-                    onClick={() => toggleHoliday(h.dates)}
-                    className={`px-3 py-1.5 text-xs font-medium border rounded-full transition-all whitespace-nowrap ${
-                      allSel
-                        ? "border-gray-400 bg-gray-100 text-gray-700"
-                        : "border-gray-200 hover:border-gray-400 hover:bg-gray-50"
-                    }`}
-                  >
-                    {allSel ? "✓ " : "+ "}{h.label}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-      </div>
-
-      {/* Two-column layout on md+ */}
-      <div className="md:grid md:grid-cols-[1fr_220px] md:gap-5 space-y-4 md:space-y-0 md:items-start">
-        {/* Left: calendar + controls */}
-        <div className="space-y-3">
-          {/* Controls row */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => { setEraseMode((e) => !e); cancelRange() }}
-                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-all ${
-                  eraseMode
-                    ? "bg-red-50 border-red-200 text-red-700"
-                    : "border-gray-200 text-gray-600 hover:border-gray-400"
-                }`}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 20H7L3 16l11-11 6 6-1.5 1.5" /><path d="M6.5 17.5l4-4" />
-                </svg>
-                {eraseMode ? "Erasing" : "Erase mode"}
-              </button>
-
-              {rangeAnchor && (
+    <div className="space-y-3">
+      {/* Holiday chips */}
+      {visibleHolidays.length > 0 && (
+        <div className="overflow-x-auto -mx-4 px-4">
+          <div className="flex gap-2 pb-1" style={{ minWidth: "max-content" }}>
+            {visibleHolidays.map((h) => {
+              const valid = h.dates.filter((d) => fromIso(d) >= today)
+              const allSel = valid.length > 0 && valid.every((d) => selected.includes(d))
+              return (
                 <button
-                  onClick={cancelRange}
-                  className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
+                  key={h.label}
+                  onClick={() => toggleHoliday(h.dates)}
+                  className={`px-3 py-1.5 text-xs font-medium border rounded-full transition-all whitespace-nowrap ${
+                    allSel ? "border-gray-400 bg-gray-100 text-gray-700" : "border-gray-200 hover:border-gray-400 hover:bg-gray-50"
+                  }`}
                 >
-                  Cancel
+                  {allSel ? "✓ " : "+ "}{h.label}
                 </button>
-              )}
-            </div>
-
-            {selected.length > 0 && !rangeAnchor && (
-              <button
-                onClick={() => setShowClearConfirm(true)}
-                className="text-xs text-gray-400 hover:text-red-600 transition-colors"
-              >
-                Clear all
-              </button>
-            )}
+              )
+            })}
           </div>
+        </div>
+      )}
 
-          {/* Hint */}
-          <p className="text-xs text-center text-gray-400">
-            {rangeAnchor
-              ? (eraseMode ? "Now tap end date to erase range →" : "Now tap end date to fill range →")
-              : "Tap a date to toggle · tap start then end to select a range"}
-          </p>
-
-          {/* Calendar */}
-          <div
-            data-testid="availability-calendar"
-            className={`border rounded-xl overflow-hidden transition-colors select-none ${
-              rangeAnchor ? "border-gray-400" : "border-gray-200"
+      {/* Controls */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setEraseMode((e) => !e); cancelRange() }}
+            className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-all ${
+              eraseMode ? "bg-red-50 border-red-200 text-red-700" : "border-gray-200 text-gray-600 hover:border-gray-400"
             }`}
-            onPointerDown={handleCalendarPointerDown}
-            onPointerUp={handleCalendarPointerUp}
-            onPointerLeave={handleCalendarPointerUp}
           >
-            <DayPicker
-              mode="multiple"
-              selected={selectedDates}
-              onDayClick={handleDayClick}
-              onDayMouseEnter={handleDayMouseEnter}
-              onDayMouseLeave={() => { if (!isDraggingRef.current) setHoverDate(null) }}
-              modifiers={{
-                anchor: anchorDates,
-                preview: previewDates,
-                previewStart: previewStartDate,
-                previewEnd: previewEndDate,
-                erasePreview: eraseMode ? erasePreviewDates : [],
-                flash: flashDateObjs,
-                aggFull, aggHigh, aggMed, aggLow,
-              }}
-              modifiersClassNames={{
-                anchor: "[&>button]:!ring-2 [&>button]:!ring-black [&>button]:!ring-offset-1",
-                preview: "!bg-blue-100 [&>button]:!bg-transparent [&>button]:!text-blue-900 [&>button]:!rounded-none [&>button]:!w-full",
-                previewStart: "!bg-blue-100 [&>button]:!bg-transparent [&>button]:!text-blue-900 [&>button]:!rounded-r-none [&>button]:!w-full",
-                previewEnd: "!bg-blue-100 [&>button]:!bg-transparent [&>button]:!text-blue-900 [&>button]:!rounded-l-none [&>button]:!w-full",
-                erasePreview: "[&>button]:!bg-red-100 [&>button]:!text-red-700",
-                flash: "[&>button]:!bg-amber-300 [&>button]:!text-amber-900",
-                aggFull: "[&>button]:ring-2 [&>button]:ring-green-500 [&>button]:ring-offset-1",
-                aggHigh: "[&>button]:ring-2 [&>button]:ring-green-300 [&>button]:ring-offset-1",
-                aggMed:  "[&>button]:ring-2 [&>button]:ring-yellow-300 [&>button]:ring-offset-1",
-                aggLow:  "[&>button]:ring-2 [&>button]:ring-orange-300 [&>button]:ring-offset-1",
-              }}
-              disabled={{ before: new Date() }}
-              numberOfMonths={1}
-              showOutsideDays
-              classNames={{
-                root: "p-3 w-full",
-                month_caption: "flex justify-center items-center py-1 mb-2 font-semibold text-sm",
-                nav: "flex items-center justify-between mb-2",
-                button_previous: "p-1 rounded hover:bg-gray-100",
-                button_next: "p-1 rounded hover:bg-gray-100",
-                month_grid: "w-full",
-                weekdays: "grid grid-cols-7 mb-1",
-                weeks: "w-full",
-                week: "grid grid-cols-7",
-                weekday: "text-center text-xs text-gray-400 py-1 font-normal",
-                day: "text-center p-0",
-                day_button: "w-9 h-9 mx-auto rounded-full text-sm hover:bg-gray-100 transition-colors flex items-center justify-center cursor-pointer",
-                selected: "[&>button]:!bg-black [&>button]:!text-white [&>button]:!hover:bg-gray-800",
-                disabled: "opacity-30 cursor-not-allowed [&>button]:cursor-not-allowed",
-                today: "[&>button]:font-bold",
-                outside: "opacity-40",
-              }}
-            />
-          </div>
-
-          {/* Auto-save status */}
-          <p className="text-xs text-center text-gray-400 h-4">
-            {isPending ? "Saving…" : rangeAnchor ? "Tap end date to complete range" : ""}
-          </p>
-
-          {/* Aggregate legend when showing group data */}
-          {dateCounts && memberCount && (
-            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-400 justify-center">
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full ring-2 ring-green-500 inline-block" />Everyone</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full ring-2 ring-green-300 inline-block" />Most</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full ring-2 ring-yellow-300 inline-block" />Half</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full ring-2 ring-orange-300 inline-block" />Some</span>
-            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 20H7L3 16l11-11 6 6-1.5 1.5" /><path d="M6.5 17.5l4-4" />
+            </svg>
+            {eraseMode ? "Erasing" : "Erase"}
+          </button>
+          {rangeAnchor && (
+            <button onClick={cancelRange} className="text-xs text-gray-400 hover:text-gray-700 transition-colors">
+              Cancel
+            </button>
           )}
         </div>
-
-        {/* Right: summary panel */}
-        <div className="border border-gray-200 rounded-xl p-4 space-y-3">
-          <div className="flex items-baseline justify-between">
-            <p className="text-sm font-semibold text-gray-900">
-              {selected.length === 0 ? "No dates selected" : `${selected.length} day${selected.length !== 1 ? "s" : ""} selected`}
-            </p>
-          </div>
-
-          {selected.length === 0 ? (
-            <p className="text-xs text-gray-400 leading-relaxed">
-              Tap dates to mark when you&apos;re free. Tap a start date then an end date to fill a range. Use the holiday chips above to quickly add long weekends.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {datesByMonth.map(({ key, label, dates }) => (
-                <div key={key}>
-                  <p className="text-xs font-medium text-gray-500 mb-1.5">{label}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {dates.map((d) => {
-                      const dt = new Date(d + "T00:00:00")
-                      const day = dt.getDate()
-                      const weekday = dt.toLocaleDateString("en-US", { weekday: "short" })
-                      return (
-                        <span
-                          key={d}
-                          className="text-xs bg-gray-100 rounded-md px-1.5 py-0.5 text-gray-700 font-medium"
-                        >
-                          {weekday} {day}
-                        </span>
-                      )
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
+        <div className="flex items-center gap-3">
+          {selected.length > 0 && (
+            <span className="text-xs text-gray-400">{selected.length} day{selected.length !== 1 ? "s" : ""}</span>
+          )}
+          {selected.length > 0 && !rangeAnchor && (
+            <button onClick={() => setShowClearConfirm(true)} className="text-xs text-gray-400 hover:text-red-600 transition-colors">
+              Clear all
+            </button>
           )}
         </div>
       </div>
+
+      {/* Range hint — only shown when active */}
+      {rangeAnchor && (
+        <p className="text-xs text-center text-gray-500">
+          {eraseMode ? "Tap end date to erase range" : "Tap end date to fill range"}
+        </p>
+      )}
+
+      {/* Calendar */}
+      <div
+        data-testid="availability-calendar"
+        className={`border rounded-xl overflow-hidden transition-colors select-none ${rangeAnchor ? "border-gray-400" : "border-gray-200"}`}
+        onPointerDown={handleCalendarPointerDown}
+        onPointerUp={handleCalendarPointerUp}
+        onPointerLeave={handleCalendarPointerUp}
+      >
+        <DayPicker
+          mode="multiple"
+          selected={selectedDates}
+          onDayClick={handleDayClick}
+          onDayMouseEnter={handleDayMouseEnter}
+          onDayMouseLeave={() => { if (!isDraggingRef.current) setHoverDate(null) }}
+          modifiers={{ anchor: anchorDates, preview: previewDates, previewStart: previewStartDate, previewEnd: previewEndDate, erasePreview: eraseMode ? erasePreviewDates : [], flash: flashDateObjs, aggFull, aggHigh, aggMed, aggLow }}
+          modifiersClassNames={{
+            anchor: "[&>button]:!ring-2 [&>button]:!ring-black [&>button]:!ring-offset-1",
+            preview: "!bg-blue-100 [&>button]:!bg-transparent [&>button]:!text-blue-900 [&>button]:!rounded-none [&>button]:!w-full",
+            previewStart: "!bg-blue-100 [&>button]:!bg-transparent [&>button]:!text-blue-900 [&>button]:!rounded-r-none [&>button]:!w-full",
+            previewEnd: "!bg-blue-100 [&>button]:!bg-transparent [&>button]:!text-blue-900 [&>button]:!rounded-l-none [&>button]:!w-full",
+            erasePreview: "[&>button]:!bg-red-100 [&>button]:!text-red-700",
+            flash: "[&>button]:!bg-amber-300 [&>button]:!text-amber-900",
+            aggFull: "[&>button]:ring-2 [&>button]:ring-green-500 [&>button]:ring-offset-1",
+            aggHigh: "[&>button]:ring-2 [&>button]:ring-green-300 [&>button]:ring-offset-1",
+            aggMed:  "[&>button]:ring-2 [&>button]:ring-yellow-300 [&>button]:ring-offset-1",
+            aggLow:  "[&>button]:ring-2 [&>button]:ring-orange-300 [&>button]:ring-offset-1",
+          }}
+          disabled={{ before: new Date() }}
+          numberOfMonths={1}
+          showOutsideDays
+          classNames={{
+            root: "p-3 w-full",
+            month_caption: "flex justify-center items-center py-1 mb-2 font-semibold text-sm",
+            nav: "flex items-center justify-between mb-2",
+            button_previous: "p-1 rounded hover:bg-gray-100",
+            button_next: "p-1 rounded hover:bg-gray-100",
+            month_grid: "w-full",
+            weekdays: "grid grid-cols-7 mb-1",
+            weeks: "w-full",
+            week: "grid grid-cols-7",
+            weekday: "text-center text-xs text-gray-400 py-1 font-normal",
+            day: "text-center p-0",
+            day_button: "w-9 h-9 mx-auto rounded-full text-sm hover:bg-gray-100 transition-colors flex items-center justify-center cursor-pointer",
+            selected: "[&>button]:!bg-black [&>button]:!text-white [&>button]:!hover:bg-gray-800",
+            disabled: "opacity-30 cursor-not-allowed [&>button]:cursor-not-allowed",
+            today: "[&>button]:font-bold",
+            outside: "opacity-40",
+          }}
+        />
+      </div>
+
+      {/* Auto-save indicator */}
+      {isPending && <p className="text-xs text-center text-gray-400">Saving…</p>}
 
       {/* Clear confirm dialog */}
       {showClearConfirm && (
