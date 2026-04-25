@@ -162,60 +162,49 @@ export default async function TripPage({ params, searchParams }: Props) {
                 inline
                 dateCounts={aggregate?.dateCounts ?? {}}
                 memberCount={aggregate?.memberCount ?? members.length}
+                scheduledStart={trip.scheduledStart ?? null}
+                scheduledEnd={trip.scheduledEnd ?? null}
               />
             </div>
 
-            {/* Best windows — only shown when there's data */}
-            {bestWindows.length > 0 && (
+            {/* Trip Dates — organizers always see this; non-organizers see it when windows exist and trip isn't yet scheduled */}
+            {(isOrganizer || (!isScheduled && bestWindows.length > 0)) && (
               <div className="border border-gray-200 rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-gray-700">Best windows</h2>
-                  {isOrganizer && (
-                    <ScheduleTrip
-                      tripId={id}
-                      bestWindows={bestWindows}
-                      currentStart={trip.scheduledStart ?? null}
-                      currentEnd={trip.scheduledEnd ?? null}
-                      minNights={minNights}
-                    />
-                  )}
-                </div>
-                <ul className="space-y-1.5">
-                  {bestWindows.map((w, i) => {
-                    const pct = Math.round(w.coverage * 100)
-                    const dotColor = pct >= 100 ? "bg-green-600" : pct >= 75 ? "bg-green-300" : pct >= 50 ? "bg-yellow-300" : "bg-orange-300"
-                    const allDates = w.dates
-                    const label = (() => {
-                      const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" }
-                      const first = new Date(allDates[0] + "T00:00:00").toLocaleDateString("en-US", opts)
-                      if (allDates.length === 1) return first
-                      const last = new Date(allDates[allDates.length - 1] + "T00:00:00").toLocaleDateString("en-US", { day: "numeric" })
-                      return `${first}–${last}`
-                    })()
-                    return (
-                      <li key={i} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-2.5">
-                          <span className={`w-2.5 h-2.5 rounded-full ${dotColor} flex-shrink-0`} />
-                          <span className="text-sm font-medium">{label}</span>
-                          <span className="text-xs text-gray-400">{allDates.length}d</span>
-                        </div>
-                        <span className="text-sm font-semibold text-gray-700">{Math.round(w.avg)}/{aggregate!.memberCount}</span>
-                      </li>
-                    )
-                  })}
-                </ul>
+                <h2 className="text-sm font-semibold text-gray-700">Trip Dates</h2>
+                {isOrganizer ? (
+                  <ScheduleTrip
+                    tripId={id}
+                    bestWindows={bestWindows}
+                    currentStart={trip.scheduledStart ?? null}
+                    currentEnd={trip.scheduledEnd ?? null}
+                    minNights={minNights}
+                  />
+                ) : (
+                  <ul className="space-y-1.5">
+                    {bestWindows.map((w, i) => {
+                      const pct = Math.round(w.coverage * 100)
+                      const dotColor = pct >= 100 ? "bg-green-600" : pct >= 75 ? "bg-green-300" : pct >= 50 ? "bg-yellow-300" : "bg-orange-300"
+                      const label = (() => {
+                        const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" }
+                        const first = new Date(w.dates[0] + "T00:00:00").toLocaleDateString("en-US", opts)
+                        if (w.dates.length === 1) return first
+                        const last = new Date(w.dates[w.dates.length - 1] + "T00:00:00").toLocaleDateString("en-US", { day: "numeric" })
+                        return `${first}–${last}`
+                      })()
+                      return (
+                        <li key={i} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-2.5">
+                            <span className={`w-2.5 h-2.5 rounded-full ${dotColor} flex-shrink-0`} />
+                            <span className="text-sm font-medium">{label}</span>
+                            <span className="text-xs text-gray-400">{w.dates.length}d</span>
+                          </div>
+                          <span className="text-sm font-semibold text-gray-700">{Math.round(w.avg)}/{aggregate!.memberCount}</span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
               </div>
-            )}
-
-            {/* Schedule button for organizer when no windows yet */}
-            {isOrganizer && bestWindows.length === 0 && (
-              <ScheduleTrip
-                tripId={id}
-                bestWindows={[]}
-                currentStart={trip.scheduledStart ?? null}
-                currentEnd={trip.scheduledEnd ?? null}
-                minNights={minNights}
-              />
             )}
 
             {/* Preferences */}

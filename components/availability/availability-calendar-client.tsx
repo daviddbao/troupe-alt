@@ -13,12 +13,16 @@ export function AvailabilityCalendarClient({
   inline,
   dateCounts,
   memberCount,
+  scheduledStart,
+  scheduledEnd,
 }: {
   tripId: string
   savedDates: string[]
   inline?: boolean
   dateCounts?: Record<string, number>
   memberCount?: number
+  scheduledStart?: string | null
+  scheduledEnd?: string | null
 }) {
   return (
     <AvailabilityCalendar
@@ -27,6 +31,8 @@ export function AvailabilityCalendarClient({
       onSaved={inline ? () => {} : undefined}
       dateCounts={dateCounts}
       memberCount={memberCount}
+      scheduledStart={scheduledStart}
+      scheduledEnd={scheduledEnd}
     />
   )
 }
