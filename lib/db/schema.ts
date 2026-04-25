@@ -8,6 +8,11 @@ export type TripPreferences = {
   notes?: string
 }
 
+export type MemberPrefs = {
+  budget?: "budget" | "mid" | "luxury"
+  notes?: string
+}
+
 export const profiles = pgTable("profiles", {
   id: text("id")
     .primaryKey()
@@ -175,4 +180,39 @@ export const tripInvites = pgTable("trip_invites", {
     .references(() => trips.id, { onDelete: "cascade" }),
   code: text("code").notNull().unique(),
   expiresAt: timestamp("expires_at"),
+})
+
+export const ideaVotes = pgTable("idea_votes", {
+  ideaId: text("idea_id")
+    .notNull()
+    .references(() => tripIdeas.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+})
+
+export const tripExpenses = pgTable("trip_expenses", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  tripId: text("trip_id")
+    .notNull()
+    .references(() => trips.id, { onDelete: "cascade" }),
+  paidBy: text("paid_by")
+    .notNull()
+    .references(() => profiles.id),
+  amount: integer("amount").notNull(), // cents
+  description: text("description").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+})
+
+export const memberPreferences = pgTable("member_preferences", {
+  tripId: text("trip_id")
+    .notNull()
+    .references(() => trips.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  budget: text("budget").$type<MemberPrefs["budget"]>(),
+  notes: text("notes"),
 })

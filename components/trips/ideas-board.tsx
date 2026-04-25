@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition, useRef } from "react"
-import { addTripIdea, deleteTripIdea } from "@/lib/actions/trips"
+import { addTripIdea, deleteTripIdea, toggleIdeaVote } from "@/lib/actions/trips"
 
 type Idea = {
   id: string
@@ -9,6 +9,8 @@ type Idea = {
   createdBy: string
   creatorName: string
   createdAt: Date | null
+  voteCount: number
+  iVoted: boolean
 }
 
 export function IdeasBoard({
@@ -38,6 +40,8 @@ export function IdeasBoard({
       createdBy: myUserId,
       creatorName: "You",
       createdAt: new Date(),
+      voteCount: 0,
+      iVoted: false,
     }
     setIdeas((prev) => [...prev, optimistic])
     setDraft("")
@@ -51,9 +55,26 @@ export function IdeasBoard({
   }
 
   function handleDelete(ideaId: string) {
+    const removed = ideas.find((i) => i.id === ideaId)
     setIdeas((prev) => prev.filter((i) => i.id !== ideaId))
     startT(async () => {
       const result = await deleteTripIdea(tripId, ideaId)
+      if (result?.error) {
+        setError(result.error)
+        if (removed) setIdeas((prev) => [...prev, removed])
+      }
+    })
+  }
+
+  function handleVote(ideaId: string) {
+    setIdeas((prev) =>
+      prev.map((i) => {
+        if (i.id !== ideaId) return i
+        return { ...i, iVoted: !i.iVoted, voteCount: i.iVoted ? i.voteCount - 1 : i.voteCount + 1 }
+      }).sort((a, b) => b.voteCount - a.voteCount || (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0))
+    )
+    startT(async () => {
+      const result = await toggleIdeaVote(tripId, ideaId)
       if (result?.error) setError(result.error)
     })
   }
@@ -71,12 +92,30 @@ export function IdeasBoard({
       {ideas.length > 0 && (
         <ul className="space-y-1.5">
           {ideas.map((idea) => (
-            <li key={idea.id} className="flex items-start gap-2 group">
-              <span className="mt-1 w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0" />
+            <li key={idea.id} className="flex items-center gap-2.5 group">
+              {/* Vote button */}
+              <button
+                onClick={() => handleVote(idea.id)}
+                disabled={isPending || idea.id.startsWith("tmp-")}
+                className={`flex flex-col items-center flex-shrink-0 w-8 py-0.5 rounded-md border transition-all disabled:opacity-40 ${
+                  idea.iVoted
+                    ? "border-black bg-black text-white"
+                    : "border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-600"
+                }`}
+                aria-label={idea.iVoted ? "Remove vote" : "Upvote"}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 15l-6-6-6 6"/>
+                </svg>
+                <span className="text-xs font-medium leading-tight">{idea.voteCount}</span>
+              </button>
+
               <span className="flex-1 text-sm text-gray-800">{idea.text}</span>
+
               <span className="text-xs text-gray-400 flex-shrink-0 hidden sm:block">
                 {idea.createdBy === myUserId ? "you" : idea.creatorName}
               </span>
+
               {(idea.createdBy === myUserId || isOrganizer) && (
                 <button
                   onClick={() => handleDelete(idea.id)}

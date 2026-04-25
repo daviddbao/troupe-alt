@@ -2,8 +2,8 @@
 
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { trips, tripMembers, tripInvites, profiles, availabilityBlocks, tripActivities, activityAttendees, tripIdeas, packingItems, packingChecks, memberFlights, hotelStays } from "@/lib/db/schema"
-import { eq, and, inArray, desc } from "drizzle-orm"
+import { trips, tripMembers, tripInvites, profiles, availabilityBlocks, tripActivities, activityAttendees, tripIdeas, packingItems, packingChecks, memberFlights, hotelStays, ideaVotes, tripExpenses, memberPreferences } from "@/lib/db/schema"
+import { eq, and, inArray, desc, sql } from "drizzle-orm"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import type { TripPreferences, TripStatus } from "@/lib/db/schema"
@@ -69,21 +69,30 @@ export async function getUserTrips() {
 
   if (rows.length === 0) return []
 
-  // Fetch member counts in one query
   const tripIds = rows.map((r) => r.trip.id)
-  const allMembers = await db
-    .select({ tripId: tripMembers.tripId })
-    .from(tripMembers)
-    .where(inArray(tripMembers.tripId, tripIds))
+
+  const [allMembers, myAvailability] = await Promise.all([
+    db.select({ tripId: tripMembers.tripId, userId: tripMembers.userId })
+      .from(tripMembers)
+      .where(inArray(tripMembers.tripId, tripIds)),
+    db.select({ tripId: availabilityBlocks.tripId })
+      .from(availabilityBlocks)
+      .where(and(
+        inArray(availabilityBlocks.tripId, tripIds),
+        eq(availabilityBlocks.userId, session.user.id)
+      )),
+  ])
 
   const memberCounts: Record<string, number> = {}
   for (const m of allMembers) {
     memberCounts[m.tripId] = (memberCounts[m.tripId] ?? 0) + 1
   }
+  const tripsWithMyAvail = new Set(myAvailability.map((a) => a.tripId))
 
   return rows.map((r) => ({
     ...r.trip,
     memberCount: memberCounts[r.trip.id] ?? 1,
+    iHaveSubmitted: tripsWithMyAvail.has(r.trip.id),
   }))
 }
 
@@ -723,8 +732,8 @@ export async function getTripIdeas(tripId: string) {
     .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
   if (!membership) return []
 
-  return db
-    .select({
+  const [ideas, votes] = await Promise.all([
+    db.select({
       id: tripIdeas.id,
       text: tripIdeas.text,
       createdBy: tripIdeas.createdBy,
@@ -734,7 +743,23 @@ export async function getTripIdeas(tripId: string) {
     .from(tripIdeas)
     .innerJoin(profiles, eq(tripIdeas.createdBy, profiles.id))
     .where(eq(tripIdeas.tripId, tripId))
-    .orderBy(tripIdeas.createdAt)
+    .orderBy(tripIdeas.createdAt),
+    db.select({ ideaId: ideaVotes.ideaId, userId: ideaVotes.userId })
+      .from(ideaVotes)
+      .innerJoin(tripIdeas, eq(ideaVotes.ideaId, tripIdeas.id))
+      .where(eq(tripIdeas.tripId, tripId)),
+  ])
+
+  const voteCounts: Record<string, number> = {}
+  const myVotes = new Set<string>()
+  for (const v of votes) {
+    voteCounts[v.ideaId] = (voteCounts[v.ideaId] ?? 0) + 1
+    if (v.userId === session.user.id) myVotes.add(v.ideaId)
+  }
+
+  return ideas
+    .map((i) => ({ ...i, voteCount: voteCounts[i.id] ?? 0, iVoted: myVotes.has(i.id) }))
+    .sort((a, b) => b.voteCount - a.voteCount || (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0))
 }
 
 export async function addTripIdea(tripId: string, text: string) {
@@ -1060,4 +1085,145 @@ export async function deleteHotelStay(tripId: string, hotelId: string) {
   await db.delete(hotelStays).where(eq(hotelStays.id, hotelId))
   revalidatePath(`/trips/${tripId}`)
   revalidatePath(`/trips/${tripId}/itinerary`)
+}
+
+// ── Idea voting ─────────────────────────────────────────────────────────────
+
+export async function toggleIdeaVote(tripId: string, ideaId: string) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return { error: "Not a member of this trip." }
+
+  const [existing] = await db
+    .select()
+    .from(ideaVotes)
+    .where(and(eq(ideaVotes.ideaId, ideaId), eq(ideaVotes.userId, session.user.id)))
+
+  if (existing) {
+    await db.delete(ideaVotes).where(and(eq(ideaVotes.ideaId, ideaId), eq(ideaVotes.userId, session.user.id)))
+  } else {
+    await db.insert(ideaVotes).values({ ideaId, userId: session.user.id })
+  }
+  revalidatePath(`/trips/${tripId}`)
+}
+
+// ── Expenses ─────────────────────────────────────────────────────────────────
+
+export async function getExpenses(tripId: string) {
+  const session = await auth()
+  if (!session?.user?.id) return []
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return []
+
+  return db
+    .select({
+      id: tripExpenses.id,
+      paidBy: tripExpenses.paidBy,
+      payerName: profiles.displayName,
+      amount: tripExpenses.amount,
+      description: tripExpenses.description,
+      createdAt: tripExpenses.createdAt,
+    })
+    .from(tripExpenses)
+    .innerJoin(profiles, eq(tripExpenses.paidBy, profiles.id))
+    .where(eq(tripExpenses.tripId, tripId))
+    .orderBy(desc(tripExpenses.createdAt))
+}
+
+export async function addExpense(tripId: string, paidBy: string, amountCents: number, description: string) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return { error: "Not a member of this trip." }
+
+  if (amountCents <= 0) return { error: "Amount must be greater than zero." }
+  if (!description.trim()) return { error: "Description is required." }
+
+  const [inserted] = await db
+    .insert(tripExpenses)
+    .values({ tripId, paidBy, amount: amountCents, description: description.trim() })
+    .returning({ id: tripExpenses.id })
+
+  revalidatePath(`/trips/${tripId}`)
+  return { id: inserted?.id }
+}
+
+export async function deleteExpense(tripId: string, expenseId: string) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const [expense] = await db
+    .select()
+    .from(tripExpenses)
+    .where(and(eq(tripExpenses.id, expenseId), eq(tripExpenses.tripId, tripId)))
+  if (!expense) return { error: "Expense not found." }
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (expense.paidBy !== session.user.id && membership?.role !== "organizer") {
+    return { error: "You can only delete your own expenses." }
+  }
+
+  await db.delete(tripExpenses).where(eq(tripExpenses.id, expenseId))
+  revalidatePath(`/trips/${tripId}`)
+}
+
+// ── Member preferences ────────────────────────────────────────────────────────
+
+export async function getMemberPreferences(tripId: string) {
+  const session = await auth()
+  if (!session?.user?.id) return []
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return []
+
+  return db
+    .select({
+      userId: memberPreferences.userId,
+      displayName: profiles.displayName,
+      budget: memberPreferences.budget,
+      notes: memberPreferences.notes,
+    })
+    .from(memberPreferences)
+    .innerJoin(profiles, eq(memberPreferences.userId, profiles.id))
+    .where(eq(memberPreferences.tripId, tripId))
+}
+
+export async function saveMemberPreferences(tripId: string, budget: string | null, notes: string | null) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return { error: "Not a member of this trip." }
+
+  await db
+    .insert(memberPreferences)
+    .values({ tripId, userId: session.user.id, budget: budget as never, notes })
+    .onConflictDoUpdate({
+      target: [memberPreferences.tripId, memberPreferences.userId],
+      set: { budget: sql`excluded.budget`, notes: sql`excluded.notes` },
+    })
+
+  revalidatePath(`/trips/${tripId}`)
 }

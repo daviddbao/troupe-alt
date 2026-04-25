@@ -60,14 +60,19 @@ export default async function DashboardPage() {
                     <span className="text-xs text-gray-400">
                       {trip.memberCount} {trip.memberCount === 1 ? "person" : "people"}
                     </span>
-                    {trip.scheduledStart && trip.scheduledEnd && (
+                    {trip.scheduledStart && trip.scheduledEnd ? (
                       <>
                         <span className="text-xs text-gray-300">·</span>
                         <span className="text-xs text-green-600 font-medium">
                           {formatDateRange(trip.scheduledStart, trip.scheduledEnd)}
                         </span>
                       </>
-                    )}
+                    ) : !trip.iHaveSubmitted ? (
+                      <>
+                        <span className="text-xs text-gray-300">·</span>
+                        <span className="text-xs text-amber-600 font-medium">Add your availability</span>
+                      </>
+                    ) : null}
                   </div>
                 </div>
                 <svg

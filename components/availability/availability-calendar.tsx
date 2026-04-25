@@ -78,9 +78,15 @@ function getDatesBetween(a: string, b: string): string[] {
   return dates
 }
 
-type Props = { tripId: string; savedDates: string[]; onSaved?: () => void }
+type Props = {
+  tripId: string
+  savedDates: string[]
+  onSaved?: () => void
+  dateCounts?: Record<string, number>
+  memberCount?: number
+}
 
-export function AvailabilityCalendar({ tripId, savedDates, onSaved }: Props) {
+export function AvailabilityCalendar({ tripId, savedDates, onSaved, dateCounts, memberCount }: Props) {
   const router = useRouter()
   const [selected, setSelected] = useState<string[]>(savedDates)
   const [rangeAnchor, setRangeAnchor] = useState<string | null>(null)
@@ -92,6 +98,7 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved }: Props) {
   const [flashDates, setFlashDates] = useState<string[]>([])
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Drag state — refs only (no re-renders)
   const isDraggingRef = useRef(false)
@@ -120,7 +127,6 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved }: Props) {
 
   // — Click handler (two-click range OR single toggle) —
   function handleDayClick(day: Date) {
-    // Skip if a drag just committed (pointer events already handled it)
     if (dragCommittedRef.current) {
       dragCommittedRef.current = false
       return
@@ -132,35 +138,39 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved }: Props) {
       if (rangeAnchor === null) {
         setRangeAnchor(iso)
       } else if (rangeAnchor === iso) {
-        setSelected((prev) => prev.filter((d) => d !== iso))
+        const next = selected.filter((d) => d !== iso)
+        setSelected(next)
         setRangeAnchor(null)
         setHoverDate(null)
+        scheduleAutoSave(next)
       } else {
         const dates = getDatesBetween(rangeAnchor, iso)
-        setSelected((prev) => prev.filter((d) => !dates.includes(d)))
+        const next = selected.filter((d) => !dates.includes(d))
+        setSelected(next)
         setRangeAnchor(null)
         setHoverDate(null)
+        scheduleAutoSave(next)
       }
       return
     }
 
     if (rangeAnchor === null) {
+      // First tap — set anchor, single-tap toggle will fire on second tap to same date
       setRangeAnchor(iso)
     } else if (rangeAnchor === iso) {
-      setSelected((prev) =>
-        prev.includes(iso) ? prev.filter((d) => d !== iso) : [...prev, iso]
-      )
+      const next = selected.includes(iso) ? selected.filter((d) => d !== iso) : [...selected, iso]
+      setSelected(next)
       setRangeAnchor(null)
       setHoverDate(null)
+      scheduleAutoSave(next)
     } else {
       const dates = getDatesBetween(rangeAnchor, iso).filter((d) => fromIso(d) >= today)
-      setSelected((prev) => {
-        const next = [...prev]
-        for (const d of dates) if (!next.includes(d)) next.push(d)
-        return next
-      })
+      const next = [...selected]
+      for (const d of dates) if (!next.includes(d)) next.push(d)
+      setSelected(next)
       setRangeAnchor(null)
       setHoverDate(null)
+      scheduleAutoSave(next)
     }
   }
 
@@ -195,18 +205,18 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved }: Props) {
 
     if (hasDragMovedRef.current && dragAnchorRef.current && hoverDate && dragAnchorRef.current !== hoverDate) {
       const dates = getDatesBetween(dragAnchorRef.current, hoverDate).filter((d) => fromIso(d) >= today)
+      let next: string[]
       if (eraseMode) {
-        setSelected((prev) => prev.filter((d) => !dates.includes(d)))
+        next = selected.filter((d) => !dates.includes(d))
       } else {
-        setSelected((prev) => {
-          const next = [...prev]
-          for (const d of dates) if (!next.includes(d)) next.push(d)
-          return next
-        })
+        next = [...selected]
+        for (const d of dates) if (!next.includes(d)) next.push(d)
       }
+      setSelected(next)
       setRangeAnchor(null)
       setHoverDate(null)
       dragCommittedRef.current = true
+      scheduleAutoSave(next)
     }
 
     isDraggingRef.current = false
@@ -252,19 +262,20 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved }: Props) {
     const valid = dates.filter((d) => fromIso(d) >= today)
     const allSelected = valid.length > 0 && valid.every((d) => selected.includes(d))
     setRangeAnchor(null)
+    let next: string[]
     if (allSelected) {
-      setSelected((prev) => prev.filter((d) => !valid.includes(d)))
+      next = selected.filter((d) => !valid.includes(d))
+      setSelected(next)
       showToast(`Removed ${valid.length} date${valid.length !== 1 ? "s" : ""}`)
     } else {
       const newDates = valid.filter((d) => !selected.includes(d))
-      setSelected((prev) => {
-        const next = [...prev]
-        for (const d of valid) if (!next.includes(d)) next.push(d)
-        return next
-      })
+      next = [...selected]
+      for (const d of valid) if (!next.includes(d)) next.push(d)
+      setSelected(next)
       flash(newDates)
       showToast(`Added ${newDates.length} date${newDates.length !== 1 ? "s" : ""}`)
     }
+    scheduleAutoSave(next)
   }
 
   function cancelRange() {
@@ -273,22 +284,23 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved }: Props) {
   }
 
   function handleClearAll() {
-    setSelected([])
+    const next: string[] = []
+    setSelected(next)
     setRangeAnchor(null)
     setHoverDate(null)
     setShowClearConfirm(false)
+    scheduleAutoSave(next)
   }
 
-  function handleSave() {
-    startTransition(async () => {
-      await setAvailabilityDates(tripId, selected)
-      showToast("Availability saved!")
-      if (onSaved) {
-        onSaved()
-      } else {
-        setTimeout(() => router.push(`/trips/${tripId}`), 1200)
-      }
-    })
+  function scheduleAutoSave(dates: string[]) {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    autoSaveTimer.current = setTimeout(() => {
+      startTransition(async () => {
+        await setAvailabilityDates(tripId, dates)
+        showToast("Saved!")
+        if (onSaved) onSaved()
+      })
+    }, 1200)
   }
 
   // Group selected dates by month for summary panel
@@ -313,6 +325,19 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved }: Props) {
   const selectedDates = selected.map(fromIso)
   const anchorDates = rangeAnchor ? [fromIso(rangeAnchor)] : []
   const flashDateObjs = flashDates.map(fromIso)
+
+  // Aggregate overlay (when group data is provided)
+  const aggFull: Date[] = [], aggHigh: Date[] = [], aggMed: Date[] = [], aggLow: Date[] = []
+  if (dateCounts && memberCount) {
+    for (const [date, count] of Object.entries(dateCounts)) {
+      const cov = count / memberCount
+      const d = fromIso(date)
+      if (cov >= 1.0) aggFull.push(d)
+      else if (cov >= 0.75) aggHigh.push(d)
+      else if (cov >= 0.5) aggMed.push(d)
+      else if (cov >= 0.25) aggLow.push(d)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -388,8 +413,8 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved }: Props) {
           {/* Hint */}
           <p className="text-xs text-center text-gray-400">
             {rangeAnchor
-              ? (eraseMode ? "Click end date to erase range" : "Click end date to fill range")
-              : "Tap to toggle · tap start then end to select a range"}
+              ? (eraseMode ? "Now tap end date to erase range →" : "Now tap end date to fill range →")
+              : "Tap a date to toggle · tap start then end to select a range"}
           </p>
 
           {/* Calendar */}
@@ -415,6 +440,7 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved }: Props) {
                 previewEnd: previewEndDate,
                 erasePreview: eraseMode ? erasePreviewDates : [],
                 flash: flashDateObjs,
+                aggFull, aggHigh, aggMed, aggLow,
               }}
               modifiersClassNames={{
                 anchor: "[&>button]:!ring-2 [&>button]:!ring-black [&>button]:!ring-offset-1",
@@ -423,6 +449,10 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved }: Props) {
                 previewEnd: "!bg-blue-100 [&>button]:!bg-transparent [&>button]:!text-blue-900 [&>button]:!rounded-l-none [&>button]:!w-full",
                 erasePreview: "[&>button]:!bg-red-100 [&>button]:!text-red-700",
                 flash: "[&>button]:!bg-amber-300 [&>button]:!text-amber-900",
+                aggFull: "[&>button]:ring-2 [&>button]:ring-green-500 [&>button]:ring-offset-1",
+                aggHigh: "[&>button]:ring-2 [&>button]:ring-green-300 [&>button]:ring-offset-1",
+                aggMed:  "[&>button]:ring-2 [&>button]:ring-yellow-300 [&>button]:ring-offset-1",
+                aggLow:  "[&>button]:ring-2 [&>button]:ring-orange-300 [&>button]:ring-offset-1",
               }}
               disabled={{ before: new Date() }}
               numberOfMonths={1}
@@ -448,14 +478,20 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved }: Props) {
             />
           </div>
 
-          {/* Save button */}
-          <button
-            onClick={handleSave}
-            disabled={isPending || rangeAnchor !== null}
-            className="w-full py-2.5 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
-          >
-            {isPending ? "Saving…" : rangeAnchor ? "Finish range first" : "Save availability"}
-          </button>
+          {/* Auto-save status */}
+          <p className="text-xs text-center text-gray-400 h-4">
+            {isPending ? "Saving…" : rangeAnchor ? "Tap end date to complete range" : ""}
+          </p>
+
+          {/* Aggregate legend when showing group data */}
+          {dateCounts && memberCount && (
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-400 justify-center">
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full ring-2 ring-green-500 inline-block" />Everyone</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full ring-2 ring-green-300 inline-block" />Most</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full ring-2 ring-yellow-300 inline-block" />Half</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full ring-2 ring-orange-300 inline-block" />Some</span>
+            </div>
+          )}
         </div>
 
         {/* Right: summary panel */}

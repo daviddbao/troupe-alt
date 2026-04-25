@@ -1,10 +1,9 @@
-import { getTripWithMembers, getExistingInvite, getUserAvailability, getTripAggregateAvailability, getTripIdeas, getPackingList, getMemberFlights, getHotelStays } from "@/lib/actions/trips"
+import { getTripWithMembers, getExistingInvite, getUserAvailability, getTripAggregateAvailability, getTripIdeas, getPackingList, getMemberFlights, getHotelStays, getExpenses, getMemberPreferences } from "@/lib/actions/trips"
 import { auth } from "@/lib/auth"
 import { headers } from "next/headers"
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { InviteSection } from "@/components/trips/invite-section"
-import { AggregateCalendarClient } from "@/components/availability/aggregate-calendar-client"
 import { ScheduleTrip } from "@/components/trips/schedule-trip"
 import { TripActions } from "@/components/trips/trip-actions"
 import { TripStatus } from "@/components/trips/trip-status"
@@ -12,8 +11,10 @@ import { IdeasBoard } from "@/components/trips/ideas-board"
 import { PackingList } from "@/components/trips/packing-list"
 import { FlightsSection } from "@/components/trips/flights-section"
 import { HotelsSection } from "@/components/trips/hotels-section"
+import { ExpensesSection } from "@/components/trips/expenses-section"
 import { TripTabs } from "@/components/trips/trip-tabs"
 import { AvailabilityCalendarClient } from "@/components/availability/availability-calendar-client"
+import { MemberPreferencesSection } from "@/components/trips/member-preferences-section"
 import type { TripStatus as TripStatusType } from "@/lib/db/schema"
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ joined?: string }> }
@@ -45,7 +46,7 @@ function formatScheduledDates(start: string, end: string) {
 
 export default async function TripPage({ params, searchParams }: Props) {
   const [{ id }, { joined }] = await Promise.all([params, searchParams])
-  const [session, data, myDates, existingInviteCode, aggregate, ideas, packingList, flights, hotels] = await Promise.all([
+  const [session, data, myDates, existingInviteCode, aggregate, ideas, packingList, flights, hotels, expenses, memberPrefs] = await Promise.all([
     auth(),
     getTripWithMembers(id),
     getUserAvailability(id),
@@ -55,6 +56,8 @@ export default async function TripPage({ params, searchParams }: Props) {
     getPackingList(id),
     getMemberFlights(id),
     getHotelStays(id),
+    getExpenses(id),
+    getMemberPreferences(id),
   ])
 
   if (!data) notFound()
@@ -75,7 +78,7 @@ export default async function TripPage({ params, searchParams }: Props) {
   const isScheduled = !!(trip.scheduledStart && trip.scheduledEnd)
   const tripStatus = (trip.status ?? "planning") as TripStatusType
 
-  const logisticsCount = flights.length + hotels.length + packingList.length
+  const logisticsCount = flights.length + hotels.length + packingList.length + expenses.length
   const ideasCount = ideas.length
 
   return (
@@ -191,13 +194,6 @@ export default async function TripPage({ params, searchParams }: Props) {
                 </p>
               )}
 
-              {aggregate && Object.keys(aggregate.dateCounts).length > 0 && (
-                <AggregateCalendarClient
-                  dateCounts={aggregate.dateCounts}
-                  memberCount={aggregate.memberCount}
-                />
-              )}
-
               {isOrganizer && (
                 <ScheduleTrip
                   tripId={id}
@@ -210,42 +206,22 @@ export default async function TripPage({ params, searchParams }: Props) {
             </div>
 
             {/* Preferences */}
-            <div className="border border-gray-200 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-semibold text-gray-700">Preferences</h2>
-                  <span className="text-xs text-gray-400">(optional)</span>
-                </div>
-                {!isOrganizer && trip.preferences && (
-                  <span className="text-xs text-gray-400">set by organizer</span>
-                )}
-              </div>
-              {trip.preferences ? (
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-gray-600">Preferences saved.</p>
-                  {isOrganizer && (
-                    <Link href={`/trips/${id}/preferences`} className="text-sm font-medium hover:underline underline-offset-2">
-                      Edit
-                    </Link>
-                  )}
-                </div>
-              ) : isOrganizer ? (
-                <Link
-                  href={`/trips/${id}/preferences`}
-                  className="block text-center py-2 text-sm font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Set trip preferences →
-                </Link>
-              ) : (
-                <p className="text-sm text-gray-400">No preferences set yet.</p>
-              )}
-            </div>
+            <MemberPreferencesSection
+              tripId={id}
+              isOrganizer={isOrganizer}
+              tripPreferences={trip.preferences ?? null}
+              initialMemberPrefs={memberPrefs}
+              myUserId={myUserId}
+              members={members.map((m) => ({ userId: m.userId, displayName: m.displayName }))}
+            />
 
-            {/* My availability */}
+            {/* Combined availability calendar — personal + aggregate overlay */}
             <AvailabilityCalendarClient
               tripId={id}
               savedDates={myDates}
               inline
+              dateCounts={aggregate?.dateCounts ?? {}}
+              memberCount={aggregate?.memberCount ?? members.length}
             />
 
             {/* People */}
@@ -301,6 +277,13 @@ export default async function TripPage({ params, searchParams }: Props) {
             <PackingList
               tripId={id}
               initialItems={packingList}
+              myUserId={myUserId}
+              isOrganizer={isOrganizer}
+              members={members.map((m) => ({ userId: m.userId, displayName: m.displayName }))}
+            />
+            <ExpensesSection
+              tripId={id}
+              initialExpenses={expenses}
               myUserId={myUserId}
               isOrganizer={isOrganizer}
               members={members.map((m) => ({ userId: m.userId, displayName: m.displayName }))}
