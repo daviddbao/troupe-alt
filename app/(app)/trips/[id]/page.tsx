@@ -13,6 +13,7 @@ import { PackingList } from "@/components/trips/packing-list"
 import { FlightsSection } from "@/components/trips/flights-section"
 import { HotelsSection } from "@/components/trips/hotels-section"
 import { TripTabs } from "@/components/trips/trip-tabs"
+import { AvailabilityCalendar } from "@/components/availability/availability-calendar"
 import type { TripStatus as TripStatusType } from "@/lib/db/schema"
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ joined?: string }> }
@@ -121,39 +122,21 @@ export default async function TripPage({ params, searchParams }: Props) {
         </div>
       )}
 
-      {/* Itinerary link — always visible */}
-      <Link
-        href={`/trips/${id}/itinerary`}
-        className={`flex items-center justify-between px-4 py-3 border rounded-xl transition-colors ${
-          isScheduled
-            ? "bg-green-700 border-green-700 text-white hover:bg-green-800 hover:border-green-800"
-            : "border-gray-200 text-gray-700 hover:bg-gray-50"
-        }`}
-      >
-        <div className="flex items-center gap-2">
+      {isScheduled && (
+        <Link
+          href={`/trips/${id}/itinerary`}
+          className="flex items-center justify-between px-4 py-3 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/>
+            </svg>
+            <span className="text-sm font-medium">Itinerary</span>
+          </div>
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/>
+            <path d="M9 18l6-6-6-6"/>
           </svg>
-          <span className="text-sm font-medium">
-            {isScheduled ? "Plan itinerary" : "Draft itinerary"}
-          </span>
-        </div>
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9 18l6-6-6-6"/>
-        </svg>
-      </Link>
-
-      {/* Amber banner if no availability */}
-      {!hasAvailability && !isScheduled && (
-        <div className="flex items-center justify-between px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
-          <p className="text-sm text-amber-800">Add your availability so the group can find the best dates.</p>
-          <Link
-            href={`/trips/${id}/availability`}
-            className="text-sm font-medium text-amber-900 underline underline-offset-2 whitespace-nowrap ml-4"
-          >
-            Add dates
-          </Link>
-        </div>
+        </Link>
       )}
 
       {/* Tabs */}
@@ -226,27 +209,44 @@ export default async function TripPage({ params, searchParams }: Props) {
               )}
             </div>
 
-            {/* My availability */}
+            {/* Preferences */}
             <div className="border border-gray-200 rounded-xl p-4">
-              <h2 className="text-sm font-semibold text-gray-700 mb-3">My availability</h2>
-              {hasAvailability ? (
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-gray-600">
-                    You&apos;ve added <span className="font-medium">{myDates.length}</span> date{myDates.length !== 1 ? "s" : ""}.
-                  </p>
-                  <Link href={`/trips/${id}/availability`} className="text-sm font-medium hover:underline underline-offset-2">
-                    Edit
-                  </Link>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-gray-700">Preferences</h2>
+                  <span className="text-xs text-gray-400">(optional)</span>
                 </div>
-              ) : (
+                {!isOrganizer && trip.preferences && (
+                  <span className="text-xs text-gray-400">set by organizer</span>
+                )}
+              </div>
+              {trip.preferences ? (
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-gray-600">Preferences saved.</p>
+                  {isOrganizer && (
+                    <Link href={`/trips/${id}/preferences`} className="text-sm font-medium hover:underline underline-offset-2">
+                      Edit
+                    </Link>
+                  )}
+                </div>
+              ) : isOrganizer ? (
                 <Link
-                  href={`/trips/${id}/availability`}
-                  className="block text-center py-2 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  href={`/trips/${id}/preferences`}
+                  className="block text-center py-2 text-sm font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                 >
-                  Add your availability →
+                  Set trip preferences →
                 </Link>
+              ) : (
+                <p className="text-sm text-gray-400">No preferences set yet.</p>
               )}
             </div>
+
+            {/* My availability */}
+            <AvailabilityCalendar
+              tripId={id}
+              savedDates={myDates}
+              onSaved={() => {}}
+            />
 
             {/* People */}
             <div className="border border-gray-200 rounded-xl p-4">
@@ -282,38 +282,6 @@ export default async function TripPage({ params, searchParams }: Props) {
 
             {/* Invite */}
             <InviteSection tripId={id} existingCode={existingInviteCode} baseUrl={baseUrl} />
-
-            {/* Preferences */}
-            <div className="border border-gray-200 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-semibold text-gray-700">Preferences</h2>
-                  <span className="text-xs text-gray-400">(optional)</span>
-                </div>
-                {!isOrganizer && trip.preferences && (
-                  <span className="text-xs text-gray-400">set by organizer</span>
-                )}
-              </div>
-              {trip.preferences ? (
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-gray-600">Preferences saved.</p>
-                  {isOrganizer && (
-                    <Link href={`/trips/${id}/preferences`} className="text-sm font-medium hover:underline underline-offset-2">
-                      Edit
-                    </Link>
-                  )}
-                </div>
-              ) : isOrganizer ? (
-                <Link
-                  href={`/trips/${id}/preferences`}
-                  className="block text-center py-2 text-sm font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Set trip preferences →
-                </Link>
-              ) : (
-                <p className="text-sm text-gray-400">No preferences set yet.</p>
-              )}
-            </div>
           </div>
         }
         logisticsContent={

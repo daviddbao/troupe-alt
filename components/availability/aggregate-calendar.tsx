@@ -67,11 +67,11 @@ export function AggregateCalendar({ dateCounts, memberCount }: Props) {
 
       {/* Legend */}
       <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-gray-500 px-1">
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-600 inline-block flex-shrink-0" />All</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-200 inline-block flex-shrink-0" />75%+</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-200 inline-block flex-shrink-0" />50%+</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-200 inline-block flex-shrink-0" />25%+</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-200 inline-block flex-shrink-0" />Some</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-600 inline-block flex-shrink-0" />Everyone</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-200 inline-block flex-shrink-0" />Most</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-200 inline-block flex-shrink-0" />Half</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-200 inline-block flex-shrink-0" />Some</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-200 inline-block flex-shrink-0" />Few</span>
       </div>
     </div>
   )

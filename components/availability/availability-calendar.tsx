@@ -78,9 +78,9 @@ function getDatesBetween(a: string, b: string): string[] {
   return dates
 }
 
-type Props = { tripId: string; savedDates: string[] }
+type Props = { tripId: string; savedDates: string[]; onSaved?: () => void }
 
-export function AvailabilityCalendar({ tripId, savedDates }: Props) {
+export function AvailabilityCalendar({ tripId, savedDates, onSaved }: Props) {
   const router = useRouter()
   const [selected, setSelected] = useState<string[]>(savedDates)
   const [rangeAnchor, setRangeAnchor] = useState<string | null>(null)
@@ -179,7 +179,7 @@ export function AvailabilityCalendar({ tripId, savedDates }: Props) {
   // — Drag pointer events —
   function handleCalendarPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0) return
-    // Only start drag on actual day cells (not nav buttons)
+    if (e.pointerType === "touch") return  // tap-to-toggle handles mobile
     const target = e.target as HTMLElement
     if (!target.closest("td")) return
     if (hoverDate && fromIso(hoverDate) >= today) {
@@ -267,39 +267,6 @@ export function AvailabilityCalendar({ tripId, savedDates }: Props) {
     }
   }
 
-  // — Weekday bulk toggle (next 6 months) —
-  function getWeekdayDates(weekday: number): string[] {
-    const end = new Date(today)
-    end.setMonth(end.getMonth() + 6)
-    const dates: string[] = []
-    const cur = new Date(today)
-    while (cur.getDay() !== weekday) cur.setDate(cur.getDate() + 1)
-    while (cur <= end) {
-      dates.push(toIso(new Date(cur)))
-      cur.setDate(cur.getDate() + 7)
-    }
-    return dates
-  }
-
-  function toggleWeekday(weekday: number) {
-    const dates = getWeekdayDates(weekday)
-    const allSelected = dates.length > 0 && dates.every((d) => selected.includes(d))
-    setRangeAnchor(null)
-    if (allSelected) {
-      setSelected((prev) => prev.filter((d) => !dates.includes(d)))
-      showToast(`Removed ${WEEKDAY_LABELS[weekday]}s`)
-    } else {
-      const newDates = dates.filter((d) => !selected.includes(d))
-      setSelected((prev) => {
-        const next = [...prev]
-        for (const d of dates) if (!next.includes(d)) next.push(d)
-        return next
-      })
-      flash(newDates)
-      showToast(`Added ${WEEKDAY_LABELS[weekday]}s`)
-    }
-  }
-
   function cancelRange() {
     setRangeAnchor(null)
     setHoverDate(null)
@@ -316,7 +283,11 @@ export function AvailabilityCalendar({ tripId, savedDates }: Props) {
     startTransition(async () => {
       await setAvailabilityDates(tripId, selected)
       showToast("Availability saved!")
-      setTimeout(() => router.push(`/trips/${tripId}`), 1200)
+      if (onSaved) {
+        onSaved()
+      } else {
+        setTimeout(() => router.push(`/trips/${tripId}`), 1200)
+      }
     })
   }
 
@@ -371,28 +342,6 @@ export function AvailabilityCalendar({ tripId, savedDates }: Props) {
           </div>
         )}
 
-        {/* Weekday chips */}
-        <div className="overflow-x-auto -mx-4 px-4">
-          <div className="flex gap-2 pb-1" style={{ minWidth: "max-content" }}>
-            {WEEKDAY_LABELS.map((label, i) => {
-              const dates = getWeekdayDates(i)
-              const allSel = dates.length > 0 && dates.every((d) => selected.includes(d))
-              return (
-                <button
-                  key={label}
-                  onClick={() => toggleWeekday(i)}
-                  className={`px-3 py-1.5 text-xs font-medium border rounded-full transition-all whitespace-nowrap ${
-                    allSel
-                      ? "border-gray-400 bg-gray-100 text-gray-700"
-                      : "border-gray-200 hover:border-gray-400 hover:bg-gray-50"
-                  }`}
-                >
-                  {allSel ? "✓ " : ""}{label}s
-                </button>
-              )
-            })}
-          </div>
-        </div>
       </div>
 
       {/* Two-column layout on md+ */}
@@ -440,7 +389,7 @@ export function AvailabilityCalendar({ tripId, savedDates }: Props) {
           <p className="text-xs text-center text-gray-400">
             {rangeAnchor
               ? (eraseMode ? "Click end date to erase range" : "Click end date to fill range")
-              : "Click to toggle · drag to select a range"}
+              : "Tap to toggle · tap start then end to select a range"}
           </p>
 
           {/* Calendar */}
@@ -519,7 +468,7 @@ export function AvailabilityCalendar({ tripId, savedDates }: Props) {
 
           {selected.length === 0 ? (
             <p className="text-xs text-gray-400 leading-relaxed">
-              Click dates or drag across the calendar to mark when you&apos;re free. Use the chips above to quickly add holidays or all weekdays.
+              Tap dates to mark when you&apos;re free. Tap a start date then an end date to fill a range. Use the holiday chips above to quickly add long weekends.
             </p>
           ) : (
             <div className="space-y-3">
