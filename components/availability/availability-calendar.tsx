@@ -18,15 +18,16 @@ function lastWeekday(year: number, month: number, weekday: number): Date {
   return new Date(year, month, last.getDate() - diff)
 }
 
-function holidayWeekend(holiday: Date, today: Date): string[] {
-  if (holiday < today) return []
-  const dates: string[] = []
-  for (let offset = -3; offset <= 3; offset++) {
-    const d = new Date(holiday)
-    d.setDate(d.getDate() + offset)
-    if (d >= today) dates.push(toIso(d))
-  }
-  return dates
+// Returns offsets from base date to cover the holiday + nearest weekend + days between.
+function getHolidayOffsets(base: Date): number[] {
+  const dow = base.getDay() // 0=Sun … 6=Sat
+  const prevSatOffset = -((dow + 1) % 7) // 0 for Sat, -1 for Sun, …, -6 for Fri
+  const nextSatOffset = prevSatOffset === 0 ? 7 : prevSatOffset + 7
+  const satOffset = Math.abs(prevSatOffset) <= nextSatOffset ? prevSatOffset : nextSatOffset
+  const sunOffset = satOffset + 1
+  const minOff = Math.min(0, satOffset)
+  const maxOff = Math.max(0, sunOffset)
+  return Array.from({ length: maxOff - minOff + 1 }, (_, i) => minOff + i)
 }
 
 function buildHolidays(): { label: string; dates: string[] }[] {
@@ -37,18 +38,21 @@ function buildHolidays(): { label: string; dates: string[] }[] {
   const seen = new Set<string>()
 
   for (const year of [y, y + 1]) {
-    const candidates = [
-      { label: "Memorial Day", date: lastWeekday(year, 4, 1) },
-      { label: "4th of July",  date: new Date(year, 6, 4) },
-      { label: "Labor Day",    date: nthWeekday(year, 8, 1, 1) },
-      { label: "Thanksgiving", date: nthWeekday(year, 10, 4, 4) },
-      { label: "Christmas",    date: new Date(year, 11, 25) },
+    const defs = [
+      { label: "Memorial Day", base: lastWeekday(year, 4, 1) },
+      { label: "4th of July",  base: new Date(year, 6, 4) },
+      { label: "Labor Day",    base: nthWeekday(year, 8, 1, 1) },
+      { label: "Thanksgiving", base: nthWeekday(year, 10, 4, 4) },
+      { label: "Christmas",    base: new Date(year, 11, 25) },
     ]
-    for (const { label, date } of candidates) {
-      if (!seen.has(label)) {
-        const dates = holidayWeekend(date, today)
-        if (dates.length > 0) { result.push({ label, dates }); seen.add(label) }
-      }
+    for (const { label, base } of defs) {
+      if (seen.has(label)) continue
+      const offsets = getHolidayOffsets(base)
+      const dates = offsets
+        .map((o) => { const d = new Date(base); d.setDate(d.getDate() + o); return d })
+        .filter((d) => d >= today)
+        .map(toIso)
+      if (dates.length > 0) { result.push({ label, dates }); seen.add(label) }
     }
   }
   return result
@@ -57,7 +61,10 @@ function buildHolidays(): { label: string; dates: string[] }[] {
 const HOLIDAYS = buildHolidays()
 
 function toIso(d: Date): string {
-  return d.toISOString().slice(0, 10)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
 }
 
 function fromIso(s: string): Date {
@@ -71,7 +78,7 @@ function getDatesBetween(a: string, b: string): string[] {
   const cur = fromIso(start)
   const endDate = fromIso(end)
   while (cur <= endDate) {
-    dates.push(toIso(new Date(cur)))
+    dates.push(toIso(cur))
     cur.setDate(cur.getDate() + 1)
   }
   return dates
@@ -95,6 +102,9 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved, dateCounts, 
   const [isPending, startTransition] = useTransition()
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [flashDates, setFlashDates] = useState<string[]>([])
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => {
+    const d = new Date(); d.setDate(1); return d
+  })
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -154,8 +164,9 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved, dateCounts, 
     }
 
     if (rangeAnchor === null) {
-      // First tap — set anchor, single-tap toggle will fire on second tap to same date
+      // First tap — set anchor, clear stale hover so preview doesn't show backward immediately
       setRangeAnchor(iso)
+      setHoverDate(null)
     } else if (rangeAnchor === iso) {
       const next = selected.includes(iso) ? selected.filter((d) => d !== iso) : [...selected, iso]
       setSelected(next)
@@ -275,6 +286,8 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved, dateCounts, 
       showToast(`Added ${newDates.length} date${newDates.length !== 1 ? "s" : ""}`)
     }
     scheduleAutoSave(next)
+    // Jump calendar to the holiday's month
+    if (valid.length > 0) setCalendarMonth(fromIso(valid[0]))
   }
 
   function cancelRange() {
@@ -283,12 +296,16 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved, dateCounts, 
   }
 
   function handleClearAll() {
-    const next: string[] = []
-    setSelected(next)
+    setSelected([])
     setRangeAnchor(null)
     setHoverDate(null)
     setShowClearConfirm(false)
-    scheduleAutoSave(next)
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    startTransition(async () => {
+      await setAvailabilityDates(tripId, [])
+      showToast("Cleared")
+      if (onSaved) onSaved()
+    })
   }
 
   function scheduleAutoSave(dates: string[]) {
@@ -296,10 +313,10 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved, dateCounts, 
     autoSaveTimer.current = setTimeout(() => {
       startTransition(async () => {
         await setAvailabilityDates(tripId, dates)
-        showToast("Saved!")
+        showToast("Saved")
         if (onSaved) onSaved()
       })
-    }, 1200)
+    }, 600)
   }
 
   const visibleHolidays = HOLIDAYS.filter((h) => h.dates.length > 0)
@@ -393,6 +410,8 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved, dateCounts, 
         onPointerLeave={handleCalendarPointerUp}
       >
         <DayPicker
+          month={calendarMonth}
+          onMonthChange={setCalendarMonth}
           mode="multiple"
           selected={selectedDates}
           onDayClick={handleDayClick}

@@ -290,7 +290,7 @@ export async function getTripAggregateAvailability(tripId: string) {
   ])
 
   const tripRow = tripRowArr[0]
-  const minNights = (tripRow?.preferences as { nights?: number } | null)?.nights ?? 1
+  const minNights = (tripRow?.preferences as { nights?: number } | null)?.nights ?? 3
 
   const dateCounts: Record<string, number> = {}
   const submittedSet = new Set<string>()
