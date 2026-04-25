@@ -10,9 +10,17 @@ const AvailabilityCalendar = dynamic(
 export function AvailabilityCalendarClient({
   tripId,
   savedDates,
+  inline,
 }: {
   tripId: string
   savedDates: string[]
+  inline?: boolean
 }) {
-  return <AvailabilityCalendar tripId={tripId} savedDates={savedDates} />
+  return (
+    <AvailabilityCalendar
+      tripId={tripId}
+      savedDates={savedDates}
+      onSaved={inline ? () => {} : undefined}
+    />
+  )
 }

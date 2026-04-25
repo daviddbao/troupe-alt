@@ -13,7 +13,7 @@ import { PackingList } from "@/components/trips/packing-list"
 import { FlightsSection } from "@/components/trips/flights-section"
 import { HotelsSection } from "@/components/trips/hotels-section"
 import { TripTabs } from "@/components/trips/trip-tabs"
-import { AvailabilityCalendar } from "@/components/availability/availability-calendar"
+import { AvailabilityCalendarClient } from "@/components/availability/availability-calendar-client"
 import type { TripStatus as TripStatusType } from "@/lib/db/schema"
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ joined?: string }> }
@@ -242,10 +242,10 @@ export default async function TripPage({ params, searchParams }: Props) {
             </div>
 
             {/* My availability */}
-            <AvailabilityCalendar
+            <AvailabilityCalendarClient
               tripId={id}
               savedDates={myDates}
-              onSaved={() => {}}
+              inline
             />
 
             {/* People */}
