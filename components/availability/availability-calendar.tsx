@@ -440,6 +440,27 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved, dateCounts, 
         />
       </div>
 
+      {/* Ring legend — only shown when group data is present */}
+      {dateCounts && memberCount && memberCount > 1 && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-xs text-gray-400">Rings = others&apos; availability:</span>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="flex items-center gap-1 text-xs text-gray-500">
+              <span className="inline-block w-3 h-3 rounded-full border-2 border-green-500" /> All
+            </span>
+            <span className="flex items-center gap-1 text-xs text-gray-500">
+              <span className="inline-block w-3 h-3 rounded-full border-2 border-green-300" /> Most
+            </span>
+            <span className="flex items-center gap-1 text-xs text-gray-500">
+              <span className="inline-block w-3 h-3 rounded-full border-2 border-yellow-300" /> Half
+            </span>
+            <span className="flex items-center gap-1 text-xs text-gray-500">
+              <span className="inline-block w-3 h-3 rounded-full border-2 border-orange-300" /> Some
+            </span>
+          </div>
+        </div>
+      )}
+
       {isPending && <p className="text-xs text-center text-gray-400">Saving…</p>}
 
       {showClearConfirm && (

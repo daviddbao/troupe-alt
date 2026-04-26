@@ -1199,8 +1199,10 @@ export async function getMemberPreferences(tripId: string) {
     .select({
       userId: memberPreferences.userId,
       displayName: profiles.displayName,
-      budget: memberPreferences.budget,
+      tripLength: memberPreferences.tripLength,
+      ptoBudget: memberPreferences.ptoBudget,
       vibes: memberPreferences.vibes,
+      weather: memberPreferences.weather,
       notes: memberPreferences.notes,
     })
     .from(memberPreferences)
@@ -1208,7 +1210,14 @@ export async function getMemberPreferences(tripId: string) {
     .where(eq(memberPreferences.tripId, tripId))
 }
 
-export async function saveMemberPreferences(tripId: string, budget: string | null, vibes: string | null, notes: string | null) {
+export async function saveMemberPreferences(
+  tripId: string,
+  tripLength: string | null,
+  ptoBudget: string | null,
+  vibes: string | null,
+  weather: string | null,
+  notes: string | null
+) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
@@ -1220,10 +1229,16 @@ export async function saveMemberPreferences(tripId: string, budget: string | nul
 
   await db
     .insert(memberPreferences)
-    .values({ tripId, userId: session.user.id, budget: budget as never, vibes, notes })
+    .values({ tripId, userId: session.user.id, tripLength, ptoBudget, vibes, weather, notes })
     .onConflictDoUpdate({
       target: [memberPreferences.tripId, memberPreferences.userId],
-      set: { budget: sql`excluded.budget`, vibes: sql`excluded.vibes`, notes: sql`excluded.notes` },
+      set: {
+        tripLength: sql`excluded.trip_length`,
+        ptoBudget: sql`excluded.pto_budget`,
+        vibes: sql`excluded.vibes`,
+        weather: sql`excluded.weather`,
+        notes: sql`excluded.notes`,
+      },
     })
 
   revalidatePath(`/trips/${tripId}`)

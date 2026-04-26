@@ -9,7 +9,9 @@ export type TripPreferences = {
 }
 
 export type MemberPrefs = {
-  budget?: "budget" | "mid" | "luxury"
+  tripLength?: string
+  ptoBudget?: string
+  weather?: string
   notes?: string
 }
 
@@ -213,7 +215,9 @@ export const memberPreferences = pgTable("member_preferences", {
   userId: text("user_id")
     .notNull()
     .references(() => profiles.id, { onDelete: "cascade" }),
-  budget: text("budget").$type<MemberPrefs["budget"]>(),
-  vibes: text("vibes"), // comma-separated: "beach,city,mountains" etc
+  vibes: text("vibes"), // comma-separated location prefs: "beach,city,mountains" etc
   notes: text("notes"),
+  tripLength: text("trip_length"),
+  ptoBudget: text("pto_budget"),
+  weather: text("weather"),
 })
