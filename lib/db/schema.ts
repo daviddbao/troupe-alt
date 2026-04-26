@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, json } from "drizzle-orm/pg-core"
+import { pgTable, text, integer, timestamp, json, primaryKey } from "drizzle-orm/pg-core"
 
 export type TripPreferences = {
   nights?: number
@@ -220,4 +220,6 @@ export const memberPreferences = pgTable("member_preferences", {
   tripLength: text("trip_length"),
   ptoBudget: text("pto_budget"),
   weather: text("weather"),
-})
+}, (t) => ({
+  pk: primaryKey({ columns: [t.tripId, t.userId] }),
+}))

@@ -50,6 +50,8 @@ export function IdeasBoard({
       if (result?.error) {
         setIdeas((prev) => prev.filter((i) => i.id !== optimistic.id))
         setError(result.error)
+      } else if (result?.id) {
+        setIdeas((prev) => prev.map((i) => i.id === optimistic.id ? { ...i, id: result.id! } : i))
       }
     })
   }
@@ -75,7 +77,16 @@ export function IdeasBoard({
     )
     startT(async () => {
       const result = await toggleIdeaVote(tripId, ideaId)
-      if (result?.error) setError(result.error)
+      if (result?.error) {
+        // Revert optimistic vote
+        setIdeas((prev) =>
+          prev.map((i) => {
+            if (i.id !== ideaId) return i
+            return { ...i, iVoted: !i.iVoted, voteCount: i.iVoted ? i.voteCount - 1 : i.voteCount + 1 }
+          }).sort((a, b) => b.voteCount - a.voteCount || (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0))
+        )
+        setError(result.error)
+      }
     })
   }
 

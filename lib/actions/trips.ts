@@ -100,6 +100,12 @@ export async function getExistingInvite(tripId: string) {
   const session = await auth()
   if (!session?.user?.id) return null
 
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return null
+
   const [invite] = await db
     .select()
     .from(tripInvites)
@@ -696,6 +702,12 @@ export async function updateActivityCategory(
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
+  const [membership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  if (!membership) return { error: "Not a member of this trip." }
+
   const [activity] = await db
     .select()
     .from(tripActivities)
@@ -707,12 +719,6 @@ export async function updateActivityCategory(
   if (!activity.isOpen && activity.createdBy !== session.user.id) {
     return { error: "Only the creator can edit this activity." }
   }
-
-  const [membership] = await db
-    .select()
-    .from(tripMembers)
-    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
-  if (!membership) return { error: "Not a member of this trip." }
 
   await db
     .update(tripActivities)
@@ -775,8 +781,12 @@ export async function addTripIdea(tripId: string, text: string) {
   const trimmed = text.trim()
   if (!trimmed) return { error: "Idea cannot be empty." }
 
-  await db.insert(tripIdeas).values({ tripId, createdBy: session.user.id, text: trimmed })
+  const [inserted] = await db
+    .insert(tripIdeas)
+    .values({ tripId, createdBy: session.user.id, text: trimmed })
+    .returning({ id: tripIdeas.id })
   revalidatePath(`/trips/${tripId}`)
+  return { id: inserted?.id }
 }
 
 export async function deleteTripIdea(tripId: string, ideaId: string) {
@@ -1151,6 +1161,12 @@ export async function addExpense(tripId: string, paidBy: string, amountCents: nu
 
   if (amountCents <= 0) return { error: "Amount must be greater than zero." }
   if (!description.trim()) return { error: "Description is required." }
+
+  const [payerMembership] = await db
+    .select()
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, paidBy)))
+  if (!payerMembership) return { error: "Payer must be a trip member." }
 
   const [inserted] = await db
     .insert(tripExpenses)

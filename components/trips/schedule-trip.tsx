@@ -37,7 +37,7 @@ export function ScheduleTrip({
     setLocalStart(currentStart ?? "")
     setLocalEnd(currentEnd ?? "")
     setShowWindows(!currentStart && bestWindows.length > 0)
-  }, [currentStart, currentEnd, bestWindows.length])
+  }, [currentStart, currentEnd, bestWindows])
 
   const today = new Date().toISOString().slice(0, 10)
   const isScheduled = !!(currentStart && currentEnd)

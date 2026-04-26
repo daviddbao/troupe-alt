@@ -16,12 +16,15 @@ export function InviteSection({
 }) {
   const [code, setCode] = useState<string | null>(existingCode)
   const [sectionOpen, setSectionOpen] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   function handleGenerate() {
+    setError(null)
     startTransition(async () => {
       const result = await createInvite(tripId)
-      if (result.code) setCode(result.code)
+      if (result?.error) { setError(result.error); return }
+      if (result?.code) setCode(result.code)
     })
   }
 
@@ -50,6 +53,7 @@ export function InviteSection({
               {isPending ? "Generating…" : "Generate invite link"}
             </button>
           )}
+          {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
       )}
     </div>

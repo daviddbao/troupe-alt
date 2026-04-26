@@ -60,33 +60,55 @@ export function PackingList({
   }
 
   function handleDelete(itemId: string) {
-    const removed = items.find((i) => i.id === itemId)
+    const idx = items.findIndex((i) => i.id === itemId)
+    const removed = items[idx]
     setItems((prev) => prev.filter((i) => i.id !== itemId))
     startT(async () => {
       const result = await deletePackingItem(tripId, itemId)
       if (result?.error) {
         setError(result.error)
-        if (removed) setItems((prev) => [...prev, removed])
+        if (removed) setItems((prev) => {
+          const next = [...prev]
+          next.splice(Math.min(idx, next.length), 0, removed)
+          return next
+        })
       }
     })
   }
 
   function handleToggle(itemId: string) {
+    const item = items.find((i) => i.id === itemId)
+    if (!item) return
+    const wasPacked = item.iPackedIt
     setItems((prev) =>
-      prev.map((item) => {
-        if (item.id !== itemId) return item
-        const nowPacked = !item.iPackedIt
+      prev.map((i) => {
+        if (i.id !== itemId) return i
         return {
-          ...item,
-          iPackedIt: nowPacked,
-          packedByIds: nowPacked
-            ? [...item.packedByIds, myUserId]
-            : item.packedByIds.filter((id) => id !== myUserId),
+          ...i,
+          iPackedIt: !wasPacked,
+          packedByIds: !wasPacked
+            ? [...i.packedByIds, myUserId]
+            : i.packedByIds.filter((id) => id !== myUserId),
         }
       })
     )
     startT(async () => {
-      await togglePackingCheck(tripId, itemId)
+      const result = await togglePackingCheck(tripId, itemId)
+      if (result?.error) {
+        setItems((prev) =>
+          prev.map((i) => {
+            if (i.id !== itemId) return i
+            return {
+              ...i,
+              iPackedIt: wasPacked,
+              packedByIds: wasPacked
+                ? [...i.packedByIds, myUserId]
+                : i.packedByIds.filter((id) => id !== myUserId),
+            }
+          })
+        )
+        setError(result.error)
+      }
     })
   }
 

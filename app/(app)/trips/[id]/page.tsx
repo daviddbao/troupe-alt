@@ -195,7 +195,7 @@ export default async function TripPage({ params, searchParams }: Props) {
                             <span className="text-sm font-medium">{label}</span>
                             <span className="text-xs text-gray-400">{w.dates.length}d</span>
                           </div>
-                          <span className="text-sm font-semibold text-gray-700">{Math.round(w.avg)}/{aggregate!.memberCount}</span>
+                          <span className="text-sm font-semibold text-gray-700">{Math.round(w.avg)}/{aggregate?.memberCount ?? members.length}</span>
                         </li>
                       )
                     })}

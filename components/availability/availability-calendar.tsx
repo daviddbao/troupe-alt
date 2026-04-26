@@ -79,7 +79,6 @@ function buildHolidays(): { label: string; dates: string[] }[] {
   return result
 }
 
-const HOLIDAYS = buildHolidays()
 
 function getDatesBetween(a: string, b: string): string[] {
   const [start, end] = a <= b ? [a, b] : [b, a]
@@ -129,6 +128,9 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved, dateCounts, 
   const today = useMemo(() => {
     const d = new Date(); d.setHours(0, 0, 0, 0); return d
   }, [])
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const HOLIDAYS = useMemo(() => buildHolidays(), [])
 
   function showToast(msg: string) {
     setToast(msg)

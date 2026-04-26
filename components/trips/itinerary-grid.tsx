@@ -163,8 +163,7 @@ export function ItineraryGrid({
       setSelCat(null)
       setSelColor(null)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title])
+  }, [title, selCat, sugCat])
 
   function showToast(msg: string) {
     setToast(msg)
@@ -240,31 +239,56 @@ export function ItineraryGrid({
   }
 
   function handleToggleJoin(activityId: string) {
-    // Optimistic update
+    const activity = local.find((a) => a.id === activityId)
+    if (!activity) return
+    const wasAttending = activity.iAmAttending
     setLocal((prev) =>
       prev.map((a) => {
         if (a.id !== activityId) return a
-        const joining = !a.iAmAttending
         return {
           ...a,
-          iAmAttending: joining,
-          attendees: joining
+          iAmAttending: !wasAttending,
+          attendees: !wasAttending
             ? [...a.attendees, { userId: myUserId, displayName: myDisplayName }]
             : a.attendees.filter((att) => att.userId !== myUserId),
         }
       })
     )
     startT(async () => {
-      await toggleActivityAttendance(activityId, tripId)
+      const result = await toggleActivityAttendance(activityId, tripId)
+      if (result?.error) {
+        setLocal((prev) =>
+          prev.map((a) => {
+            if (a.id !== activityId) return a
+            return {
+              ...a,
+              iAmAttending: wasAttending,
+              attendees: wasAttending
+                ? [...a.attendees, { userId: myUserId, displayName: myDisplayName }]
+                : a.attendees.filter((att) => att.userId !== myUserId),
+            }
+          })
+        )
+        showToast(result.error)
+      }
     })
   }
 
   function handleUpdateCategory(activityId: string, category: string | null, color: string | null) {
+    const activity = local.find((a) => a.id === activityId)
+    const prevCategory = activity?.category ?? null
+    const prevColor = activity?.color ?? null
     setLocal((prev) =>
       prev.map((a) => (a.id === activityId ? { ...a, category, color } : a))
     )
     startT(async () => {
-      await updateActivityCategory(activityId, tripId, category, color)
+      const result = await updateActivityCategory(activityId, tripId, category, color)
+      if (result?.error) {
+        setLocal((prev) =>
+          prev.map((a) => (a.id === activityId ? { ...a, category: prevCategory, color: prevColor } : a))
+        )
+        showToast(result.error)
+      }
     })
   }
 
