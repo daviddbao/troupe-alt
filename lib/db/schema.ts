@@ -205,6 +205,7 @@ export const tripExpenses = pgTable("trip_expenses", {
     .references(() => profiles.id),
   amount: integer("amount").notNull(), // cents
   description: text("description").notNull(),
+  splitWith: json("split_with").$type<string[]>(), // null = split among all trip members
   createdAt: timestamp("created_at").defaultNow(),
 })
 

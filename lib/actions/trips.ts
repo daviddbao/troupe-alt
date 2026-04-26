@@ -283,14 +283,30 @@ export async function getTripAggregateAvailability(tripId: string) {
     .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
   if (!membership) return null
 
-  const [members, blocks, tripRowArr] = await Promise.all([
+  const [members, blocks, tripRowArr, memberPrefs] = await Promise.all([
     db.select({ userId: tripMembers.userId }).from(tripMembers).where(eq(tripMembers.tripId, tripId)),
     db.select({ userId: availabilityBlocks.userId, date: availabilityBlocks.date }).from(availabilityBlocks).where(eq(availabilityBlocks.tripId, tripId)),
     db.select({ preferences: trips.preferences }).from(trips).where(eq(trips.id, tripId)),
+    db.select({ tripLength: memberPreferences.tripLength }).from(memberPreferences).where(eq(memberPreferences.tripId, tripId)),
   ])
 
   const tripRow = tripRowArr[0]
-  const minNights = (tripRow?.preferences as { nights?: number } | null)?.nights ?? 3
+  const organizerNights = (tripRow?.preferences as { nights?: number } | null)?.nights
+  let minNights: number
+  if (organizerNights != null) {
+    minNights = Math.max(1, organizerNights)
+  } else {
+    const lengthMap: Record<string, number> = { "Weekend": 2, "4-5 days": 4, "1 week": 7 }
+    const lengths = memberPrefs
+      .map((p) => (p.tripLength ? lengthMap[p.tripLength] : null))
+      .filter((n): n is number => n !== null)
+    if (lengths.length > 0) {
+      const sorted = [...lengths].sort((a, b) => a - b)
+      minNights = sorted[Math.floor(sorted.length / 2)]
+    } else {
+      minNights = 2
+    }
+  }
 
   const dateCounts: Record<string, number> = {}
   const submittedSet = new Set<string>()
@@ -811,8 +827,8 @@ export async function getPackingList(tripId: string) {
     .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
   if (!membership) return []
 
-  const items = await db
-    .select({
+  const [items, checks] = await Promise.all([
+    db.select({
       id: packingItems.id,
       label: packingItems.label,
       createdBy: packingItems.createdBy,
@@ -822,14 +838,14 @@ export async function getPackingList(tripId: string) {
     .from(packingItems)
     .innerJoin(profiles, eq(packingItems.createdBy, profiles.id))
     .where(eq(packingItems.tripId, tripId))
-    .orderBy(packingItems.createdAt)
+    .orderBy(packingItems.createdAt),
+    db.select({ itemId: packingChecks.itemId, userId: packingChecks.userId })
+    .from(packingChecks)
+    .innerJoin(packingItems, eq(packingChecks.itemId, packingItems.id))
+    .where(eq(packingItems.tripId, tripId)),
+  ])
 
   if (items.length === 0) return []
-
-  const checks = await db
-    .select()
-    .from(packingChecks)
-    .where(inArray(packingChecks.itemId, items.map((i) => i.id)))
 
   return items.map((item) => ({
     ...item,
@@ -1131,6 +1147,7 @@ export async function getExpenses(tripId: string) {
       payerName: profiles.displayName,
       amount: tripExpenses.amount,
       description: tripExpenses.description,
+      splitWith: tripExpenses.splitWith,
       createdAt: tripExpenses.createdAt,
     })
     .from(tripExpenses)
@@ -1139,22 +1156,23 @@ export async function getExpenses(tripId: string) {
     .orderBy(desc(tripExpenses.createdAt))
 }
 
-export async function addExpense(tripId: string, paidBy: string, amountCents: number, description: string) {
+export async function addExpense(tripId: string, paidBy: string, amountCents: number, description: string, splitWith: string[] | null) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
-  const [membership] = await db
-    .select()
-    .from(tripMembers)
-    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id)))
+  const [[membership], [payerMembership]] = await Promise.all([
+    db.select().from(tripMembers).where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, session.user.id))),
+    db.select().from(tripMembers).where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, paidBy))),
+  ])
   if (!membership) return { error: "Not a member of this trip." }
+  if (!payerMembership) return { error: "Payer must be a trip member." }
 
   if (amountCents <= 0) return { error: "Amount must be greater than zero." }
   if (!description.trim()) return { error: "Description is required." }
 
   const [inserted] = await db
     .insert(tripExpenses)
-    .values({ tripId, paidBy, amount: amountCents, description: description.trim() })
+    .values({ tripId, paidBy, amount: amountCents, description: description.trim(), splitWith: splitWith && splitWith.length > 0 ? splitWith : null })
     .returning({ id: tripExpenses.id })
 
   revalidatePath(`/trips/${tripId}`)

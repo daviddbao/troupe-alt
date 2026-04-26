@@ -34,13 +34,15 @@ export function PackingList({
   const [isPending, startT] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
-  function handleAdd() {
-    const label = draft.trim()
-    if (!label) return
+  const SUGGESTIONS = ["Passport", "Charging cable", "Travel adapter", "Portable charger", "Toothbrush", "Toothpaste", "Skincare", "Glasses/contacts", "Pen", "Hat", "Headphones"]
+
+  function handleAddLabel(label: string) {
+    const trimmed = label.trim()
+    if (!trimmed) return
     setError(null)
     const optimistic: PackingItem = {
       id: `tmp-${Date.now()}`,
-      label,
+      label: trimmed,
       createdBy: myUserId,
       creatorName: "You",
       packedByIds: [],
@@ -49,7 +51,7 @@ export function PackingList({
     setItems((prev) => [...prev, optimistic])
     setDraft("")
     startT(async () => {
-      const result = await addPackingItem(tripId, label)
+      const result = await addPackingItem(tripId, trimmed)
       if (result?.error) {
         setItems((prev) => prev.filter((i) => i.id !== optimistic.id))
         setError(result.error)
@@ -58,6 +60,8 @@ export function PackingList({
       }
     })
   }
+
+  function handleAdd() { handleAddLabel(draft) }
 
   function handleDelete(itemId: string) {
     const removed = items.find((i) => i.id === itemId)
@@ -168,6 +172,27 @@ export function PackingList({
       )}
 
       {error && <p className="text-xs text-red-600">{error}</p>}
+
+      {/* Quick-add suggestion chips — hide already-added items */}
+      {(() => {
+        const existing = new Set(items.map((i) => i.label.toLowerCase()))
+        const available = SUGGESTIONS.filter((s) => !existing.has(s.toLowerCase()))
+        if (available.length === 0) return null
+        return (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {available.map((s) => (
+              <button
+                key={s}
+                onClick={() => handleAddLabel(s)}
+                disabled={isPending}
+                className="px-2.5 py-1 text-xs border border-gray-200 rounded-full text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors disabled:opacity-40"
+              >
+                + {s}
+              </button>
+            ))}
+          </div>
+        )
+      })()}
 
       <div className="flex gap-2 pt-1">
         <input
