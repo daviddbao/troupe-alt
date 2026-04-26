@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { addHotelStay, deleteHotelStay } from "@/lib/actions/trips"
+import { Chevron } from "@/components/ui/collapsible-card"
 
 type Hotel = {
   id: string
@@ -44,6 +45,7 @@ export function HotelsSection({
   isOrganizer: boolean
 }) {
   const [hotels, setHotels] = useState<Hotel[]>(initialHotels)
+  const [sectionOpen, setSectionOpen] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [isPending, startT] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -105,13 +107,14 @@ export function HotelsSection({
   }
 
   return (
-    <div className="border border-gray-200 rounded-xl p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+    <div className="border border-gray-200 rounded-xl">
+      <div className="flex items-center justify-between px-4 py-3">
+        <button onClick={() => setSectionOpen((v) => !v)} className="flex items-center gap-2">
           <HotelIcon />
-          <h2 className="text-sm font-semibold text-gray-700">Hotels</h2>
-        </div>
-        {!showForm && (
+          <span className="text-sm font-semibold text-gray-700">Hotels</span>
+          <Chevron open={sectionOpen} />
+        </button>
+        {sectionOpen && !showForm && (
           <button
             onClick={() => setShowForm(true)}
             className="text-xs font-medium text-gray-500 hover:text-black transition-colors"
@@ -120,6 +123,8 @@ export function HotelsSection({
           </button>
         )}
       </div>
+
+      {sectionOpen && <div className="px-4 pb-4 space-y-3">
 
       {hotels.length === 0 && !showForm && (
         <p className="text-sm text-gray-400">Add your hotel so the group can see where everyone&apos;s staying.</p>
@@ -256,6 +261,8 @@ export function HotelsSection({
           </div>
         </div>
       )}
+
+      </div>}
     </div>
   )
 }

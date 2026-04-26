@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { addPackingItem, deletePackingItem, togglePackingCheck } from "@/lib/actions/trips"
+import { Chevron } from "@/components/ui/collapsible-card"
 
 type PackingItem = {
   id: string
@@ -28,6 +29,7 @@ export function PackingList({
   members: Member[]
 }) {
   const [items, setItems] = useState<PackingItem[]>(initialItems)
+  const [sectionOpen, setSectionOpen] = useState(true)
   const [draft, setDraft] = useState("")
   const [isPending, startT] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -91,16 +93,18 @@ export function PackingList({
   const packedCount = items.filter((i) => i.iPackedIt).length
 
   return (
-    <div className="border border-gray-200 rounded-xl p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-gray-700">Packing list</h2>
-          <span className="text-xs text-gray-400">(optional)</span>
-        </div>
-        {items.length > 0 && (
+    <div className="border border-gray-200 rounded-xl">
+      <div className="flex items-center justify-between px-4 py-3">
+        <button onClick={() => setSectionOpen((v) => !v)} className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-gray-700">Packing list</span>
+          <Chevron open={sectionOpen} />
+        </button>
+        {sectionOpen && items.length > 0 && (
           <span className="text-xs text-gray-400">{packedCount}/{items.length} packed</span>
         )}
       </div>
+
+      {sectionOpen && <div className="px-4 pb-4 space-y-3">
 
       {items.length === 0 && (
         <p className="text-sm text-gray-400">
@@ -181,6 +185,8 @@ export function PackingList({
           Add
         </button>
       </div>
+
+      </div>}
     </div>
   )
 }

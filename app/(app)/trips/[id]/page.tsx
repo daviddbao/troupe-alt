@@ -15,6 +15,7 @@ import { ExpensesSection } from "@/components/trips/expenses-section"
 import { TripTabs } from "@/components/trips/trip-tabs"
 import { AvailabilityCalendarClient } from "@/components/availability/availability-calendar-client"
 import { MemberPreferencesSection } from "@/components/trips/member-preferences-section"
+import { CollapsibleCard } from "@/components/ui/collapsible-card"
 import type { TripStatus as TripStatusType } from "@/lib/db/schema"
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ joined?: string }> }
@@ -149,13 +150,10 @@ export default async function TripPage({ params, searchParams }: Props) {
         planContent={
           <div className="space-y-4">
             {/* Availability calendar — first thing you see */}
-            <div className="border border-gray-200 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-gray-700">My availability</h2>
-                {submittedCount > 0 && (
-                  <span className="text-xs text-gray-400">{submittedCount}/{members.length} submitted</span>
-                )}
-              </div>
+            <CollapsibleCard
+              title="My availability"
+              badge={submittedCount > 0 ? <span className="text-xs text-gray-400">{submittedCount}/{members.length} submitted</span> : undefined}
+            >
               <AvailabilityCalendarClient
                 tripId={id}
                 savedDates={myDates}
@@ -165,12 +163,11 @@ export default async function TripPage({ params, searchParams }: Props) {
                 scheduledStart={trip.scheduledStart ?? null}
                 scheduledEnd={trip.scheduledEnd ?? null}
               />
-            </div>
+            </CollapsibleCard>
 
             {/* Trip Dates — organizers always see this; non-organizers see it when windows exist and trip isn't yet scheduled */}
             {(isOrganizer || (!isScheduled && bestWindows.length > 0)) && (
-              <div className="border border-gray-200 rounded-xl p-4 space-y-3">
-                <h2 className="text-sm font-semibold text-gray-700">Trip Dates</h2>
+              <CollapsibleCard title="Trip Dates">
                 {isOrganizer ? (
                   <ScheduleTrip
                     tripId={id}
@@ -204,7 +201,7 @@ export default async function TripPage({ params, searchParams }: Props) {
                     })}
                   </ul>
                 )}
-              </div>
+              </CollapsibleCard>
             )}
 
             {/* Preferences */}
@@ -218,36 +215,33 @@ export default async function TripPage({ params, searchParams }: Props) {
             />
 
             {/* People */}
-            <div className="border border-gray-200 rounded-xl p-4">
-              <h2 className="text-sm font-semibold text-gray-700 mb-3">People</h2>
-              <ul className="space-y-2.5">
-                {members.map((m) => {
-                  const color = getAvatarColor(m.userId)
-                  const hasSubmitted = submittedUserIds.has(m.userId)
-                  return (
-                    <li key={m.userId} className="flex items-center gap-2.5">
-                      <div className={`w-7 h-7 rounded-full ${color.bg} flex items-center justify-center text-xs font-semibold ${color.text} flex-shrink-0`}>
-                        {m.displayName[0].toUpperCase()}
-                      </div>
-                      <span className="text-sm flex-1">{m.displayName}</span>
-                      {m.userId === myUserId && (
-                        <span className="text-xs text-gray-400">you</span>
-                      )}
-                      {m.role === "organizer" && (
-                        <span className="text-xs text-gray-400">organizer</span>
-                      )}
-                      {hasSubmitted ? (
-                        <svg className="text-green-500 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M20 6L9 17l-5-5" />
-                        </svg>
-                      ) : (
-                        <span className="w-3.5 h-3.5 rounded-full border border-dashed border-gray-300 flex-shrink-0" />
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
+            <CollapsibleCard title="People" contentClass="space-y-2.5">
+              {members.map((m) => {
+                const color = getAvatarColor(m.userId)
+                const hasSubmitted = submittedUserIds.has(m.userId)
+                return (
+                  <div key={m.userId} className="flex items-center gap-2.5">
+                    <div className={`w-7 h-7 rounded-full ${color.bg} flex items-center justify-center text-xs font-semibold ${color.text} flex-shrink-0`}>
+                      {m.displayName[0].toUpperCase()}
+                    </div>
+                    <span className="text-sm flex-1">{m.displayName}</span>
+                    {m.userId === myUserId && (
+                      <span className="text-xs text-gray-400">you</span>
+                    )}
+                    {m.role === "organizer" && (
+                      <span className="text-xs text-gray-400">organizer</span>
+                    )}
+                    {hasSubmitted ? (
+                      <svg className="text-green-500 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                    ) : (
+                      <span className="w-3.5 h-3.5 rounded-full border border-dashed border-gray-300 flex-shrink-0" />
+                    )}
+                  </div>
+                )
+              })}
+            </CollapsibleCard>
 
             {/* Invite */}
             <InviteSection tripId={id} existingCode={existingInviteCode} baseUrl={baseUrl} />

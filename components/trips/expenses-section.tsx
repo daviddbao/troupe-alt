@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { addExpense, deleteExpense } from "@/lib/actions/trips"
+import { Chevron } from "@/components/ui/collapsible-card"
 
 type Expense = {
   id: string
@@ -59,6 +60,7 @@ export function ExpensesSection({
   members: Member[]
 }) {
   const [expenses, setExpenses] = useState<Expense[]>(initialExpenses)
+  const [sectionOpen, setSectionOpen] = useState(true)
   const [description, setDescription] = useState("")
   const [amountStr, setAmountStr] = useState("")
   const [paidBy, setPaidBy] = useState(myUserId)
@@ -115,20 +117,23 @@ export function ExpensesSection({
   }
 
   return (
-    <div className="border border-gray-200 rounded-xl p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-gray-700">Expenses</h2>
-          {expenses.length > 0 && (
+    <div className="border border-gray-200 rounded-xl">
+      <div className="flex items-center justify-between px-4 py-3">
+        <button onClick={() => setSectionOpen((v) => !v)} className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-gray-700">Expenses</span>
+          {sectionOpen && expenses.length > 0 && (
             <span className="text-xs text-gray-400">{formatAmount(total)} total</span>
           )}
-        </div>
-        {myBalance && (
+          <Chevron open={sectionOpen} />
+        </button>
+        {sectionOpen && myBalance && (
           <span className={`text-xs font-medium ${myBalance.balance > 0 ? "text-green-600" : "text-red-500"}`}>
             {myBalance.balance > 0 ? `You're owed ${formatAmount(myBalance.balance)}` : `You owe ${formatAmount(-myBalance.balance)}`}
           </span>
         )}
       </div>
+
+      {sectionOpen && <div className="px-4 pb-4 space-y-3">
 
       {expenses.length === 0 && !showAdd && (
         <p className="text-sm text-gray-400">Track who paid for what and settle up after the trip.</p>
@@ -235,6 +240,8 @@ export function ExpensesSection({
           + Add expense
         </button>
       )}
+
+      </div>}
     </div>
   )
 }
