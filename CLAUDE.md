@@ -2,6 +2,11 @@
 
 # Troupe — Claude Code Guide
 
+## Git Workflow
+- Work directly on `master`. Do not create feature branches unless explicitly asked.
+- After completing any task: commit with a clear message and `git push origin master`.
+- No PRs needed — this is a solo project.
+
 ## Stack
 - **Framework:** Next.js 16.2.2 (App Router, TypeScript, Turbopack)
 - **DB local:** SQLite via `better-sqlite3` + Drizzle ORM
