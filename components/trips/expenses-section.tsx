@@ -10,6 +10,7 @@ type Expense = {
   payerName: string
   amount: number
   description: string
+  splitWith: string[] | null
   createdAt: Date | null
 }
 
@@ -25,15 +26,25 @@ function parseAmount(s: string): number | null {
   return Math.round(n * 100)
 }
 
+function getSplitMembers(exp: Expense, allMembers: Member[]): Member[] {
+  if (!exp.splitWith || exp.splitWith.length === 0) return allMembers
+  return allMembers.filter((m) => exp.splitWith!.includes(m.userId))
+}
+
 function calculateBalances(expenses: Expense[], members: Member[], myUserId: string) {
   if (members.length === 0 || expenses.length === 0) return []
   const balances: Record<string, number> = {}
   for (const m of members) balances[m.userId] = 0
 
   for (const exp of expenses) {
-    const share = exp.amount / members.length
-    if (balances[exp.paidBy] !== undefined) balances[exp.paidBy] += exp.amount - share
-    for (const m of members) {
+    const splitMembers = getSplitMembers(exp, members)
+    if (splitMembers.length === 0) continue
+    const share = exp.amount / splitMembers.length
+    if (balances[exp.paidBy] !== undefined) {
+      const paidByInSplit = splitMembers.some((m) => m.userId === exp.paidBy)
+      balances[exp.paidBy] += paidByInSplit ? exp.amount - share : exp.amount
+    }
+    for (const m of splitMembers) {
       if (m.userId !== exp.paidBy && balances[m.userId] !== undefined) {
         balances[m.userId] -= share
       }
@@ -64,6 +75,7 @@ export function ExpensesSection({
   const [description, setDescription] = useState("")
   const [amountStr, setAmountStr] = useState("")
   const [paidBy, setPaidBy] = useState(myUserId)
+  const [splitWith, setSplitWith] = useState<Set<string>>(new Set(members.map((m) => m.userId)))
   const [showAdd, setShowAdd] = useState(false)
   const [isPending, startT] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -79,22 +91,25 @@ export function ExpensesSection({
     setError(null)
 
     const payer = members.find((m) => m.userId === paidBy)
+    const splitArr = splitWith.size === members.length ? null : Array.from(splitWith)
     const optimistic: Expense = {
       id: `tmp-${Date.now()}`,
       paidBy,
       payerName: paidBy === myUserId ? "You" : (payer?.displayName ?? ""),
       amount: cents,
       description: description.trim(),
+      splitWith: splitArr,
       createdAt: new Date(),
     }
     setExpenses((prev) => [optimistic, ...prev])
     setDescription("")
     setAmountStr("")
     setPaidBy(myUserId)
+    setSplitWith(new Set(members.map((m) => m.userId)))
     setShowAdd(false)
 
     startT(async () => {
-      const result = await addExpense(tripId, paidBy, cents, description.trim())
+      const result = await addExpense(tripId, paidBy, cents, description.trim(), splitArr)
       if (result?.error) {
         setExpenses((prev) => prev.filter((e) => e.id !== optimistic.id))
         setError(result.error)
@@ -146,7 +161,7 @@ export function ExpensesSection({
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-gray-800 truncate">{exp.description}</p>
                 <p className="text-xs text-gray-400">
-                  {exp.paidBy === myUserId ? "You" : exp.payerName} paid · split {members.length} ways
+                  {exp.paidBy === myUserId ? "You" : exp.payerName} paid · split {getSplitMembers(exp, members).length} ways
                 </p>
               </div>
               <span className="text-sm font-medium text-gray-700 flex-shrink-0">{formatAmount(exp.amount)}</span>
@@ -216,6 +231,36 @@ export function ExpensesSection({
               </select>
             )}
           </div>
+          {members.length > 1 && (
+            <div>
+              <p className="text-xs text-gray-400 mb-1.5">Split with</p>
+              <div className="flex flex-wrap gap-1.5">
+                {members.map((m) => {
+                  const checked = splitWith.has(m.userId)
+                  return (
+                    <button
+                      key={m.userId}
+                      type="button"
+                      onClick={() => {
+                        setSplitWith((prev) => {
+                          const next = new Set(prev)
+                          if (checked) next.delete(m.userId); else next.add(m.userId)
+                          return next
+                        })
+                      }}
+                      className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                        checked
+                          ? "bg-black text-white border-black"
+                          : "border-gray-200 text-gray-500 hover:border-gray-400"
+                      }`}
+                    >
+                      {m.userId === myUserId ? "You" : m.displayName}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           <div className="flex gap-2">
             <button
               onClick={() => { setShowAdd(false); setError(null) }}
