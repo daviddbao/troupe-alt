@@ -171,8 +171,13 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved, dateCounts, 
         setRangeAnchor(iso); setHoverDate(null)
       }
     } else if (rangeAnchor === iso) {
-      // Tap anchor again: cancel
-      setRangeAnchor(null); setHoverDate(null)
+      // Tap anchor again: select just that one day
+      if (!selected.includes(iso)) {
+        const next = [...selected, iso]
+        setSelected(next); setRangeAnchor(null); setHoverDate(null); scheduleAutoSave(next)
+      } else {
+        setRangeAnchor(null); setHoverDate(null)
+      }
     } else {
       // Complete the range
       const dates = getDatesBetween(rangeAnchor, iso).filter((d) => fromIso(d) >= today)
@@ -373,7 +378,7 @@ export function AvailabilityCalendar({ tripId, savedDates, onSaved, dateCounts, 
 
       {rangeAnchor && (
         <p className="text-xs text-center text-gray-500">
-          {eraseMode ? "Tap end date to erase range" : "Tap end date to fill range"}
+          {eraseMode ? "Tap end date to erase range" : "Tap again to select just this day, or tap another to fill a range"}
         </p>
       )}
 

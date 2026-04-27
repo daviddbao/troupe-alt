@@ -147,6 +147,7 @@ export async function joinTripByCode(code: string) {
     .where(eq(tripInvites.code, code))
 
   if (!invite) return { error: "Invalid invite link." }
+  if (invite.expiresAt && invite.expiresAt < new Date()) return { error: "This invite link has expired." }
 
   const [existing] = await db
     .select()
@@ -847,11 +848,18 @@ export async function getPackingList(tripId: string) {
 
   if (items.length === 0) return []
 
-  return items.map((item) => ({
-    ...item,
-    packedByIds: checks.filter((c) => c.itemId === item.id).map((c) => c.userId),
-    iPackedIt: checks.some((c) => c.itemId === item.id && c.userId === session.user!.id),
-  }))
+  const checksByItem = new Map<string, string[]>()
+  for (const c of checks) {
+    const ids = checksByItem.get(c.itemId) ?? []
+    ids.push(c.userId)
+    checksByItem.set(c.itemId, ids)
+  }
+
+  const myId = session.user!.id
+  return items.map((item) => {
+    const packedByIds = checksByItem.get(item.id) ?? []
+    return { ...item, packedByIds, iPackedIt: packedByIds.includes(myId) }
+  })
 }
 
 export async function addPackingItem(tripId: string, label: string) {
